@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privara HIDS - Enterprise Security Platform v4.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        :root { --primary-bg: #0a0a0a; --secondary-bg: #151515; --accent-primary: #1a3a3a; --accent-secondary: #2a6a6a; --text-primary: #e0e0e0; --text-secondary: #909090; --border: #2a4a4a; --success: #4a8a6a; --warning: #8a6a2a; --critical: #d24a4a; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--primary-bg); color: var(--text-primary); display: flex; height: 100vh; font-size: 13px; }
+        .container { display: flex; width: 100%; height: 100%; }
+        .sidebar { width: 260px; background-color: var(--secondary-bg); border-right: 1px solid var(--border); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+        .logo { font-size: 26px; font-weight: 900; text-align: center; margin-bottom: 10px; color: var(--accent-secondary); letter-spacing: 2px; }
+        .profile-banner { background-color: var(--accent-primary); padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 11px; color: var(--text-secondary); text-align: center; }
+        .sidebar-nav { flex: 1; overflow-y: auto; }
+        .nav-section { margin-bottom: 15px; }
+        .nav-section-title { font-size: 10px; font-weight: bold; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px; padding-left: 10px; }
+        .nav-link { display: block; padding: 12px 16px; margin-bottom: 4px; border-radius: 6px; text-decoration: none; color: var(--text-secondary); transition: all 0.3s; border-left: 3px solid transparent; font-size: 13px; }
+        .nav-link:hover { background-color: rgba(42, 106, 106, 0.3); color: var(--text-primary); }
+        .nav-link.active { background-color: var(--accent-primary); color: var(--accent-secondary); border-left: 3px solid var(--accent-secondary); }
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px; }
+        #header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+        #currentTime { font-size: 18px; font-weight: bold; }
+        #currentDate { color: var(--text-secondary); font-size: 12px; }
+        .view { display: none; }
+        .view.active { display: block; animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        h2 { font-size: 28px; margin-bottom: 20px; color: var(--text-primary); }
+        h3 { font-size: 16px; margin-bottom: 15px; color: var(--text-primary); margin-top: 20px; }
+        h4 { font-size: 14px; margin-bottom: 10px; color: var(--accent-secondary); }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        th { background-color: var(--accent-primary); padding: 12px; text-align: left; color: var(--text-primary); font-weight: 600; }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        tr:hover { background-color: rgba(42, 106, 106, 0.1); }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge-critical { background-color: #d24a4a; color: white; }
+        .badge-high { background-color: #8a6a2a; color: white; }
+        .badge-medium { background-color: #5a5a2a; color: white; }
+        .badge-safe { background-color: var(--success); color: white; }
+        .badge-active { color: var(--warning); }
+        .badge-contained { color: var(--success); }
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .metric-card { background-color: var(--secondary-bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; }
+        .metric-label { color: var(--text-secondary); font-size: 11px; font-weight: 600; margin-bottom: 8px; }
+        .metric-value { font-size: 24px; font-weight: bold; color: var(--accent-secondary); }
+        .metric-bar { width: 100%; height: 6px; background-color: var(--border); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+        .metric-fill { height: 100%; background-color: var(--accent-secondary); transition: width 0.3s; }
+        .btn { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s; }
+        .btn-primary { background-color: var(--accent-secondary); color: white; }
+        .btn-primary:hover { opacity: 0.8; }
+        .btn-danger { background-color: var(--critical); color: white; }
+        .btn-secondary { background-color: var(--accent-primary); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-success { background-color: var(--success); color: white; }
+        .btn-sm { padding: 6px 12px; font-size: 11px; }
+        .config-section { background-color: var(--secondary-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .config-section label { display: block; margin-bottom: 10px; color: var(--text-secondary); font-size: 12px; }
+        .config-section input, .config-section select, .config-section textarea { width: 100%; padding: 8px 12px; background-color: var(--primary-bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); margin-bottom: 15px; font-size: 12px; }
+        .checkbox-group, .radio-group { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px; }
+        .checkbox-item, .radio-item { display: flex; align-items: center; gap: 8px; }
+        .checkbox-item input, .radio-item input { width: 16px; height: 16px; }
+        #simulationContainer { margin-top: 20px; }
+        #pathSvg { width: 100%; height: 250px; background-color: var(--secondary-bg); border: 1px solid var(--border); border-radius: 8px; }
+        #graphNodes { position: relative; height: 300px; margin-top: 20px; background-color: var(--secondary-bg); border: 1px solid var(--border); border-radius: 8px; }
+        .graph-node { position: absolute; padding: 10px; background-color: var(--accent-primary); border: 2px solid var(--border); border-radius: 6px; font-size: 10px; text-align: center; transition: all 0.3s; }
+        #pathDetails { margin-top: 20px; padding: 15px; background-color: var(--secondary-bg); border: 1px solid var(--border); border-radius: 8px; }
+        .detail-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+        .detail-item:last-child { border-bottom: none; }
+        .detail-label { color: var(--text-secondary); font-size: 11px; }
+        .detail-value { color: var(--accent-secondary); font-weight: bold; }
+        .canvas-container { height: 350px; margin-bottom: 30px; position: relative; }
+        .ml-card { background-color: var(--secondary-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 15px; }
+        .ml-metric { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .ml-metric:last-child { border-bottom: none; }
+        .ml-metric-label { color: var(--text-secondary); }
+        .ml-metric-value { color: var(--accent-secondary); font-weight: bold; }
+        .dropdown-select { width: 100%; padding: 10px; background-color: var(--primary-bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); margin-bottom: 15px; cursor: pointer; }
+        .lockdown-action { background-color: var(--secondary-bg); border-left: 3px solid var(--critical); padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+        .lockdown-action h4 { color: var(--critical); margin-top: 0; }
+        .hardening-item { background-color: var(--secondary-bg); padding: 15px; margin-bottom: 10px; border-radius: 4px; border: 1px solid var(--border); }
+        .hardening-item.active { border-left: 3px solid var(--success); }
+        .sanitization-action { background-color: var(--secondary-bg); padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+        .gdpr-section { background-color: rgba(210, 74, 74, 0.1); border: 1px solid var(--critical); padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        #toastContainer { position: fixed; top: 20px; right: 20px; z-index: 1000; }
+        .toast { padding: 14px 18px; margin-bottom: 10px; border-radius: 6px; color: white; font-size: 12px; animation: slideIn 0.4s ease; }
+        @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast-info { background-color: #2a6a6a; }
+        .toast-success { background-color: var(--success); }
+        .toast-error { background-color: var(--critical); }
+        .warning-banner { background-color: rgba(210, 74, 74, 0.1); border-left: 3px solid var(--critical); padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .db-table-selector { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .db-table-selector button { padding: 8px 16px; background-color: var(--accent-primary); border: 1px solid var(--border); color: var(--text-primary); border-radius: 4px; cursor: pointer; }
+        .db-table-selector button.active { background-color: var(--accent-secondary); }
+        .db-export { margin-top: 20px; }
+        .scrollable-table { max-height: 500px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="sidebar">
+        <div class="logo">PRIVARA</div>
+        <div class="profile-banner" id="profileBanner">Profile: Vikrama (Default)</div>
+        <nav class="sidebar-nav">
+            <!-- MAIN MONITORING -->
+            <div class="nav-section">
+                <div class="nav-section-title">Core Monitoring</div>
+                <a href="#" class="nav-link active" data-view="dashboard">Dashboard</a>
+                <a href="#" class="nav-link" data-view="threats">Threats</a>
+                <a href="#" class="nav-link" data-view="processes">Process Manager</a>
+                <a href="#" class="nav-link" data-view="simulation">Threat Simulation</a>
+            </div>
+
+            <!-- ANALYSIS & DETECTION -->
+            <div class="nav-section">
+                <div class="nav-section-title">Analysis</div>
+                <a href="#" class="nav-link" data-view="mlanalysis">ML/AI Analysis</a>
+                <a href="#" class="nav-link" data-view="audit">Audit Log</a>
+                <a href="#" class="nav-link" data-view="security">Security Audit</a>
+            </div>
+
+            <!-- PROTECTION & HARDENING -->
+            <div class="nav-section">
+                <div class="nav-section-title">Protection</div>
+                <a href="#" class="nav-link" data-view="lockdown">Lockdown Mode</a>
+                <a href="#" class="nav-link" data-view="hardening">System Hardening</a>
+                <a href="#" class="nav-link" data-view="sanitization">Data Sanitation</a>
+            </div>
+
+            <!-- MANAGEMENT -->
+            <div class="nav-section">
+                <div class="nav-section-title">Management</div>
+                <a href="#" class="nav-link" data-view="configuration">Configuration</a>
+                <a href="#" class="nav-link" data-view="profile">User Profile</a>
+                <a href="#" class="nav-link" data-view="settings">Settings</a>
+            </div>
+
+            <!-- SYSTEM -->
+            <div class="nav-section">
+                <div class="nav-section-title">System</div>
+                <a href="#" class="nav-link" data-view="bugreporting">Bug Reporting</a>
+                <a href="#" class="nav-link" data-view="sqldb">SQL Database</a>
+                <a href="#" class="nav-link" data-view="developer">Developer</a>
+            </div>
+        </nav>
+    </div>
+
+    <div class="main-content">
+
+        <div id="header">
+            <div>
+                <div id="currentTime"></div>
+                <div id="currentDate"></div>
+            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); display: flex; gap: 20px;">
+                <span>🔐 NIST PQC ACTIVE</span>
+                <span>ML-KEM/ML-DSA Protected</span>
+            </div>
+        </div>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="dashboardView" class="view active">
+            <h2>Dashboard</h2>
+            <div class="grid-3">
+                <div class="metric-card">
+                    <div class="metric-label">Operating System</div>
+                    <div class="metric-value" id="osDisplay" style="font-size: 16px;">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">CPU Usage</div>
+                    <div class="metric-value" id="cpuUsageDisplay">28%</div>
+                    <div class="metric-bar"><div class="metric-fill" id="cpuBar" style="width: 28%;"></div></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Memory Usage</div>
+                    <div class="metric-value" id="memoryUsageDisplay">58%</div>
+                    <div class="metric-bar"><div class="metric-fill" id="memBar" style="width: 58%;"></div></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Disk I/O</div>
+                    <div class="metric-value" id="diskIODisplay">17%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">System Health</div>
+                    <div class="metric-value" id="systemHealth">94%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Active Threats</div>
+                    <div class="metric-value" id="activeThreats">3</div>
+                </div>
+            </div>
+
+            <h3>Recent Threats Detected</h3>
+            <table>
+                <thead><tr><th>Threat ID</th><th>Name</th><th>Type</th><th>Risk Level</th><th>Detected Time</th><th>Status</th></tr></thead>
+                <tbody id="threatsTableBody"></tbody>
+            </table>
+
+            <h3>Threat Activity Over Time</h3>
+            <div class="canvas-container"><canvas id="threatsOverTimeChart"></canvas></div>
+
+            <h3>System Resource Usage</h3>
+            <div class="grid-2">
+                <div class="canvas-container"><canvas id="cpuUsageChart"></canvas></div>
+                <div class="canvas-container"><canvas id="memoryUsageChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- THREATS VIEW -->
+        <div id="threatsView" class="view">
+            <h2>Threats</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Detected threats with detailed information and entry vectors</p>
+            <table>
+                <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Detection Method</th><th>Risk Level</th><th>Time</th><th>Status</th><th>Entry Path</th></tr></thead>
+                <tbody id="threatsDetailedTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- PROCESS MANAGER VIEW -->
+        <div id="processesView" class="view">
+            <h2>Process Manager</h2>
+            <div style="margin-bottom: 20px;">
+                <label style="color: var(--text-secondary); font-size: 12px;">Filter by Type:</label>
+                <select id="processFilter" class="dropdown-select" style="width: 200px;">
+                    <option value="all">All Processes</option>
+                    <option value="user">User Processes</option>
+                    <option value="system">System Processes</option>
+                    <option value="suspicious">Suspicious</option>
+                </select>
+            </div>
+            <table>
+                <thead><tr><th>Name</th><th>PID</th><th>User</th><th>CPU %</th><th>Memory (MB)</th><th>Disk I/O %</th><th>Category</th><th>Risk</th><th>Action</th></tr></thead>
+                <tbody id="processManagerTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- THREAT SIMULATION VIEW -->
+        <div id="simulationView" class="view">
+            <h2>Threat Simulation Engine</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Visualize attack paths and understand infection vectors</p>
+            <div style="margin-bottom: 20px;">
+                <label style="color: var(--text-secondary); font-size: 12px;">Select Attack Scenario:</label>
+                <select id="simulationScenario" class="dropdown-select">
+                    <option value="dll_injection">DLL Injection Attack</option>
+                    <option value="usb_entry">USB Device Attack</option>
+                    <option value="registry_entry">Registry Persistence Attack</option>
+                    <option value="email_entry">Email Attachment Attack</option>
+                    <option value="network_entry">Network Share Attack</option>
+                </select>
+            </div>
+            <div id="simulationContainer">
+                <svg id="pathSvg"></svg>
+                <div id="graphNodes"></div>
+                <div id="pathDetails"></div>
+            </div>
+        </div>
+
+        <!-- ML/AI ANALYSIS VIEW -->
+        <div id="mlanalysisView" class="view">
+            <h2>AI/ML Anomaly Detection Engine</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Machine Learning model performance and behavioral analysis</p>
+
+            <h3>Model Performance Metrics</h3>
+            <div class="ml-card">
+                <div class="ml-metric"><span class="ml-metric-label">True Positive Rate</span><span class="ml-metric-value">94.2%</span></div>
+                <div class="ml-metric"><span class="ml-metric-label">False Positive Rate</span><span class="ml-metric-value">2.3%</span></div>
+                <div class="ml-metric"><span class="ml-metric-label">Precision</span><span class="ml-metric-value">97.1%</span></div>
+                <div class="ml-metric"><span class="ml-metric-label">Recall</span><span class="ml-metric-value">93.8%</span></div>
+                <div class="ml-metric"><span class="ml-metric-label">F1 Score</span><span class="ml-metric-value">95.4%</span></div>
+                <div class="ml-metric"><span class="ml-metric-label">Model Version</span><span class="ml-metric-value">v2.3.1</span></div>
+                <div class="ml-metric"><span class="ml-metric-label">Training Dataset</span><span class="ml-metric-value">2.4M samples</span></div>
+                <div class="ml-metric"><span class="ml-metric-label">Last Updated</span><span class="ml-metric-value">2 days ago</span></div>
+            </div>
+
+            <h3>Feature Importance Analysis</h3>
+            <table>
+                <thead><tr><th>Feature</th><th>Importance Score</th><th>Impact</th></tr></thead>
+                <tbody id="featureImportanceBody"></tbody>
+            </table>
+
+            <h3>Malware Behavior Patterns Detection</h3>
+            <div class="grid-2">
+                <div class="ml-card">
+                    <h4>Ransomware Signatures</h4>
+                    <ul id="ransomwarePatterns" style="list-style: none; padding-left: 0;"><li style="padding: 5px 0; color: var(--text-secondary); font-size: 12px;">Loading...</li></ul>
+                </div>
+                <div class="ml-card">
+                    <h4>Trojan Indicators</h4>
+                    <ul id="trojanPatterns" style="list-style: none; padding-left: 0;"><li style="padding: 5px 0; color: var(--text-secondary); font-size: 12px;">Loading...</li></ul>
+                </div>
+                <div class="ml-card">
+                    <h4>Worm Propagation</h4>
+                    <ul id="wormPatterns" style="list-style: none; padding-left: 0;"><li style="padding: 5px 0; color: var(--text-secondary); font-size: 12px;">Loading...</li></ul>
+                </div>
+                <div class="ml-card">
+                    <h4>Rootkit Tactics</h4>
+                    <ul id="rootkitPatterns" style="list-style: none; padding-left: 0;"><li style="padding: 5px 0; color: var(--text-secondary); font-size: 12px;">Loading...</li></ul>
+                </div>
+            </div>
+
+            <h3>Security Vulnerabilities & Gaps</h3>
+            <div id="securityGapsBody"></div>
+        </div>
+
+        <!-- AUDIT LOG VIEW -->
+        <div id="auditView" class="view">
+            <h2>Audit Log</h2>
+            <table>
+                <thead><tr><th>Date</th><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+                <tbody id="auditLogTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- SECURITY AUDIT VIEW -->
+        <div id="securityView" class="view">
+            <h2>Security Audit & Vulnerability Analysis</h2>
+            <table>
+                <thead><tr><th>Process Name</th><th>PID</th><th>User</th><th>CPU %</th><th>Memory (MB)</th><th>Disk I/O (MB/s)</th><th>GPU %</th><th>Network (Mbps)</th><th>Risk</th></tr></thead>
+                <tbody id="securityAuditTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- LOCKDOWN MODE VIEW -->
+        <div id="lockdownView" class="view">
+            <h2>Lockdown Mode</h2>
+            <div class="warning-banner">⚠️ LOCKDOWN MODE - Enables aggressive containment and threat neutralization</div>
+            <div class="grid-2" style="margin-bottom: 30px;">
+                <div class="lockdown-action">
+                    <h4>🔒 File Access Isolation</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px; margin: 10px 0;">Lock user files and redirect access to honeypot directories</p>
+                    <button class="btn btn-danger btn-sm" onclick="showToast('File isolation activated', 'info')">Activate</button>
+                </div>
+                <div class="lockdown-action">
+                    <h4>📁 Decoy File Generation</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px; margin: 10px 0;">Create decoy files in sensitive directories to trap ransomware</p>
+                    <button class="btn btn-danger btn-sm" onclick="showToast('Decoy generation started', 'info')">Start</button>
+                </div>
+                <div class="lockdown-action">
+                    <h4>💾 Deep RAM Scan</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px; margin: 10px 0;">Perform deep RAM scan for hidden malware and rootkits</p>
+                    <button class="btn btn-danger btn-sm" onclick="showToast('RAM scan initiated', 'info')">Scan Now</button>
+                </div>
+                <div class="lockdown-action">
+                    <h4>🌐 Network Isolation</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px; margin: 10px 0;">Terminate all suspicious network connections</p>
+                    <button class="btn btn-danger btn-sm" onclick="showToast('Network isolation active', 'info')">Isolate</button>
+                </div>
+                <div class="lockdown-action">
+                    <h4>⚡ Resource Prioritization</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px; margin: 10px 0;">Prioritize system resources to containment engine</p>
+                    <button class="btn btn-danger btn-sm" onclick="showToast('Resource prioritization enabled', 'info')">Enable</button>
+                </div>
+                <div class="lockdown-action">
+                    <h4>📡 Adapter Disable</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px; margin: 10px 0;">Disable network adapters to prevent lateral movement</p>
+                    <button class="btn btn-danger btn-sm" onclick="showToast('Network adapters disabled', 'info')">Disable</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SYSTEM HARDENING VIEW -->
+        <div id="hardeningView" class="view">
+            <h2>Obliviscan System Hardening</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">System hardening recommendations and status</p>
+            <div id="hardeningBody"></div>
+        </div>
+
+        <!-- DATA SANITATION VIEW -->
+        <div id="sanitizationView" class="view">
+            <h2>Deep System Cleaning & Sanitization</h2>
+            <div class="grid-2" style="margin-bottom: 30px;">
+                <div class="sanitization-action">
+                    <h4>🧹 Deep System Cleaning</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px;">Remove temporary files, cache, and residual malware artifacts</p>
+                    <button class="btn btn-success btn-sm" onclick="showToast('Deep cleaning initiated', 'success')">Start Cleaning</button>
+                </div>
+                <div class="sanitization-action">
+                    <h4>🔍 Registry Cleanup</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px;">Scan and clean malicious registry entries</p>
+                    <button class="btn btn-success btn-sm" onclick="showToast('Registry cleanup started', 'success')">Cleanup Registry</button>
+                </div>
+                <div class="sanitization-action">
+                    <h4>📝 Log Sanitization</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px;">Securely wipe all audit and event logs</p>
+                    <button class="btn btn-success btn-sm" onclick="showToast('Log sanitization active', 'success')">Sanitize Logs</button>
+                </div>
+                <div class="sanitization-action">
+                    <h4>💿 Disk Wiping</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px;">Securely wipe free disk space to remove traces</p>
+                    <button class="btn btn-success btn-sm" onclick="showToast('Disk wipe scheduled', 'success')">Wipe Free Space</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONFIGURATION VIEW -->
+        <div id="configurationView" class="view">
+            <h2>Configuration File Manager</h2>
+            <div class="config-section">
+                <h4>JSON Configuration Editor</h4>
+                <textarea id="configEditor" style="height: 300px; font-family: monospace; font-size: 11px;">{"threat_detection": {"sensitivity": 65, "anomaly_threshold": 0.72, "ml_enabled": true}, "monitoring_modules": {"process_monitoring": true, "api_monitoring": true, "encryption_monitoring": true, "network_monitoring": true}, "response_policies": {"auto_contain_threshold": 0.8, "quarantine_mode": true, "auto_restart": false}}</textarea>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="validateConfig()">Validate</button>
+                    <button class="btn btn-secondary" onclick="loadConfig()">Load Config</button>
+                    <button class="btn btn-secondary" onclick="saveConfig()">Save Config</button>
+                    <button class="btn btn-secondary" onclick="downloadConfig()">Download</button>
+                </div>
+            </div>
+
+            <h3>Monitoring Module Configuration</h3>
+            <div class="config-section">
+                <div class="checkbox-group">
+                    <label class="checkbox-item"><input type="checkbox" checked> Process Monitoring</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> API Monitoring</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> Encryption Monitoring</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> Network Monitoring</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> DNS Firewall</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> Registry Monitoring</label>
+                </div>
+            </div>
+
+            <h3>Detection Sensitivity</h3>
+            <div class="config-section">
+                <label>Process Monitoring Sensitivity: <input type="range" min="0" max="100" value="65" style="width: 100%;"> <span id="processSensitivity">65</span>%</label>
+                <label>API Monitoring Sensitivity: <input type="range" min="0" max="100" value="70" style="width: 100%;"> <span id="apiSensitivity">70</span>%</label>
+                <label>Anomaly Detection Threshold: <input type="range" min="0" max="1" step="0.01" value="0.72" style="width: 100%;"> <span id="anomalySensitivity">0.72</span></label>
+            </div>
+        </div>
+
+        <!-- USER PROFILE VIEW -->
+        <div id="profileView" class="view">
+            <h2>User Profile Management</h2>
+
+            <h3>Profile Settings</h3>
+            <div class="config-section">
+                <label>Select Profile:</label>
+                <select id="profileSelector" class="dropdown-select" onchange="switchProfile(this.value)">
+                    <option value="vikrama">Vikrama (Default) - Balanced security</option>
+                    <option value="aggressive">Aggressive - Maximum monitoring</option>
+                    <option value="conservative">Conservative - Minimal overhead</option>
+                    <option value="custom">Custom - User-defined</option>
+                </select>
+            </div>
+
+            <h3>Theme Customization</h3>
+            <div class="config-section">
+                <label>Theme:</label>
+                <select class="dropdown-select" onchange="switchTheme(this.value)">
+                    <option value="tech_noir">Tech Noir</option>
+                    <option value="blade_runner">Blade Runner</option>
+                    <option value="dune">Dune</option>
+                </select>
+            </div>
+
+            <h3>Timezone Selection</h3>
+            <div class="config-section">
+                <label>Timezone:</label>
+                <select id="timezoneSelector" class="dropdown-select" onchange="switchTimezone(this.value)">
+                    <option value="GMT">GMT - Greenwich Mean Time</option>
+                    <option value="EST">EST - Eastern Standard Time</option>
+                    <option value="PST">PST - Pacific Standard Time</option>
+                    <option value="IST">IST - Indian Standard Time</option>
+                    <option value="JST">JST - Japan Standard Time</option>
+                </select>
+            </div>
+
+            <h3>GDPR Compliance</h3>
+            <div class="gdpr-section">
+                <h4>🔐 GDPR Data Protection</h4>
+                <p style="color: var(--text-secondary); font-size: 12px; margin: 10px 0;">In compliance with GDPR regulations, you have the right to:</p>
+                <div style="margin: 15px 0;">
+                    <button class="btn btn-secondary btn-sm" onclick="showToast('Data export initiated', 'info')" style="display: block; width: 100%; margin-bottom: 10px; text-align: left;">📥 Export All Personal Data</button>
+                    <button class="btn btn-secondary btn-sm" onclick="showToast('Retention policy updated', 'info')" style="display: block; width: 100%; margin-bottom: 10px; text-align: left;">⏰ Update Data Retention Policy</button>
+                    <button class="btn btn-danger btn-sm" onclick="if(confirm('This will permanently delete all logs. Continue?')) showToast('All logs deleted', 'success')" style="display: block; width: 100%; text-align: left;">🗑️ Request Data Deletion</button>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 11px; margin-top: 10px;">Data Deletion Policy: Personal data is retained for 90 days unless extended by user. All data is encrypted with AES-256 and ML-KEM post-quantum cryptography.</p>
+            </div>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div id="settingsView" class="view">
+            <h2>Settings</h2>
+
+            <h3>Monitoring Preferences</h3>
+            <div class="config-section">
+                <div class="checkbox-group" style="display: flex; flex-direction: column;">
+                    <label class="checkbox-item"><input type="checkbox" checked> Enable Auto-Scanning</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> Enable Behavioral Analysis</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> Enable Machine Learning Detection</label>
+                    <label class="checkbox-item"><input type="checkbox"> Enable Deep Packet Inspection</label>
+                </div>
+                <label style="margin-top: 15px;">Auto-scan Frequency (hours):<input type="number" value="4" style="width: 100%; margin-top: 5px;"></label>
+            </div>
+
+            <h3>Whitelist Management</h3>
+            <div class="config-section">
+                <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 15px;">Add processes or IPs to the whitelist to exclude from monitoring:</p>
+                <input type="text" placeholder="Enter process name or IP address" style="width: 100%; margin-bottom: 10px;">
+                <button class="btn btn-primary" onclick="showToast('Item added to whitelist', 'success')">Add to Whitelist</button>
+                <table style="margin-top: 15px; font-size: 11px;">
+                    <thead><tr><th>Item</th><th>Type</th><th>Action</th></tr></thead>
+                    <tbody>
+                        <tr><td>chrome.exe</td><td>Process</td><td><button class="btn btn-danger btn-sm">Remove</button></td></tr>
+                        <tr><td>firefox.exe</td><td>Process</td><td><button class="btn btn-danger btn-sm">Remove</button></td></tr>
+                        <tr><td>192.168.1.1</td><td>IP</td><td><button class="btn btn-danger btn-sm">Remove</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Notification Preferences</h3>
+            <div class="config-section">
+                <label>Alert Level:</label>
+                <select class="dropdown-select">
+                    <option>All Threats</option>
+                    <option>High Priority Only</option>
+                    <option>Critical Only</option>
+                </select>
+                <div class="checkbox-group" style="display: flex; flex-direction: column; margin-top: 15px;">
+                    <label class="checkbox-item"><input type="checkbox" checked> Desktop Notifications</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> Sound Alerts</label>
+                    <label class="checkbox-item"><input type="checkbox"> Email Notifications</label>
+                </div>
+            </div>
+
+            <h3>System Policies</h3>
+            <div class="config-section">
+                <label>Auto-containment Threshold:</label>
+                <input type="range" min="0" max="1" step="0.1" value="0.8" style="width: 100%;"> <span>80%</span>
+                <div class="checkbox-group" style="display: flex; flex-direction: column; margin-top: 15px;">
+                    <label class="checkbox-item"><input type="checkbox" checked> Auto-Containment Enabled</label>
+                    <label class="checkbox-item"><input type="checkbox" checked> Two-Factor Confirmation</label>
+                    <label class="checkbox-item"><input type="checkbox"> Automatic System Restart</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- BUG REPORTING VIEW -->
+        <div id="bugreportingView" class="view">
+            <h2>Bug Reporting System</h2>
+            <div class="warning-banner">⚠️ By submitting this report, you consent to sending diagnostic data to the development team</div>
+            <div class="config-section">
+                <h4>Report a Bug</h4>
+                <label>Bug Title:</label>
+                <input type="text" id="bugTitle" placeholder="Brief description of the issue">
+                <label>Description:</label>
+                <textarea id="bugDescription" style="height: 100px;" placeholder="Detailed explanation of the problem"></textarea>
+                <label>Steps to Reproduce:</label>
+                <textarea id="bugSteps" style="height: 80px;" placeholder="Steps to reproduce the issue"></textarea>
+                <label>Severity:</label>
+                <select id="bugSeverity" class="dropdown-select">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                </select>
+                <div class="checkbox-group" style="display: flex; flex-direction: column; margin-bottom: 15px;">
+                    <label class="checkbox-item"><input type="checkbox" id="includeSystemInfo" checked> Include System Information</label>
+                    <label class="checkbox-item"><input type="checkbox" id="includeLogs"> Include System Logs</label>
+                </div>
+                <button class="btn btn-primary" onclick="submitBugReport()" style="width: 100%;">Submit Bug Report</button>
+                <div id="bugReportStatus" style="margin-top: 15px; font-size: 12px; color: var(--text-secondary);"></div>
+            </div>
+        </div>
+
+        <!-- SQL DATABASE VIEW -->
+        <div id="sqldbView" class="view">
+            <h2>SQLite Database Log Viewer</h2>
+            <div class="config-section">
+                <h4>Database Schema Information</h4>
+                <div class="detail-item"><span>Database:</span><span>privara-security.db</span></div>
+                <div class="detail-item"><span>Version:</span><span>1.0</span></div>
+                <div class="detail-item"><span>Tables:</span><span>10</span></div>
+                <div class="detail-item"><span>Total Records:</span><span>12,847</span></div>
+                <div class="detail-item"><span>Protection:</span><span>AES-256 + ML-KEM</span></div>
+            </div>
+
+            <h3>Query Logs</h3>
+            <div class="config-section">
+                <label>Select Table:</label>
+                <select class="dropdown-select" id="dbTableSelector">
+                    <option value="metadata">Metadata</option>
+                    <option value="user_profiles">User Profiles</option>
+                    <option value="security_logs">Security Logs</option>
+                    <option value="threat_details">Threat Details</option>
+                    <option value="process_history">Process History</option>
+                    <option value="api_hooks">API Hooks</option>
+                    <option value="encryption_events">Encryption Events</option>
+                    <option value="network_blocks">Network Blocks</option>
+                    <option value="config_snapshots">Config Snapshots</option>
+                    <option value="bug_reports">Bug Reports</option>
+                </select>
+                <label style="margin-top: 15px;">Date Range:</label>
+                <input type="date" id="dbStartDate"> to <input type="date" id="dbEndDate" style="margin-left: 10px;">
+                <button class="btn btn-primary" onclick="queryLogs()" style="display: block; margin-top: 15px; width: 100%;">Query Logs</button>
+            </div>
+
+            <h3>Recurring Threat Pattern Detection</h3>
+            <table id="dbLogsTable" style="margin-top: 20px; font-size: 11px;">
+                <thead><tr><th>Timestamp</th><th>Threat ID</th><th>Type</th><th>Severity</th><th>Status</th></tr></thead>
+                <tbody>
+                    <tr><td>2025-11-17 10/11</td><td>THR-001</td><td>Ransomware</td><td>Critical</td><td>Contained</td></tr>
+                    <tr><td>2025-11-17 17/11</td><td>THR-002</td><td>Trojan</td><td>High</td><td>Quarantined</td></tr>
+                    <tr><td>2025-11-17 03:14:05</td><td>THR-003</td><td>Worm</td><td>Medium</td><td>Monitoring</td></tr>
+                </tbody>
+            </table>
+
+            <div class="db-export">
+                <button class="btn btn-secondary" onclick="exportCSV()">📊 Export CSV</button>
+                <button class="btn btn-secondary" onclick="exportJSON()">📄 Export JSON</button>
+            </div>
+        </div>
+
+        <!-- DEVELOPER VIEW -->
+        <div id="developerView" class="view">
+            <h2>Developer Credits & Legal Attribution</h2>
+            <div class="config-section">
+                <h4>Privara HIDS v4.0</h4>
+                <p style="color: var(--text-secondary); margin: 10px 0; font-size: 12px;">Enterprise-grade Host Intrusion Detection System with advanced threat simulation, ML/AI anomaly detection, and post-quantum cryptography.</p>
+                <div style="margin: 20px 0; padding: 15px; background-color: var(--primary-bg); border: 1px solid var(--border); border-radius: 4px;">
+                    <p><strong>Developer:</strong> Chandrahas</p>
+                    <p style="color: var(--text-secondary); font-size: 12px;"><strong>Technology Stack:</strong> Flask Backend + JavaFX Monitor + Modern Web UI</p>
+                    <p style="color: var(--text-secondary); font-size: 12px;"><strong>Security:</strong> NIST PQC (ML-KEM/ML-DSA), AES-256 Encryption, GDPR Compliant</p>
+                    <p style="color: var(--text-secondary); font-size: 12px;"><strong>Release Date:</strong> November 17, 2025</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<div id="toastContainer"></div>
+
+<script>
+// COMPLETE APPLICATION LOGIC
+
+// ===== PROFILES & THEMES =====
+const profiles = {
+    vikrama: { name: 'Vikrama', sensitivity: { process: 65, api: 70, encryption: 60, anomaly: 0.72 }, description: 'Default profile - Balanced security' },
+    aggressive: { name: 'Aggressive', sensitivity: { process: 95, api: 95, encryption: 90, anomaly: 0.55 }, description: 'Maximum monitoring and detection' },
+    conservative: { name: 'Conservative', sensitivity: { process: 35, api: 30, encryption: 40, anomaly: 0.85 }, description: 'Minimal overhead, core protection' },
+    custom: { name: 'Custom', sensitivity: { process: 50, api: 50, encryption: 50, anomaly: 0.70 }, description: 'User-defined configuration' }
+};
+
+const themes = {
+    tech_noir: { name: 'Tech Noir', primarybg: '#0a0a0a', secondarybg: '#151515', accentprimary: '#1a3a3a', accentsecondary: '#2a6a6a' },
+    blade_runner: { name: 'Blade Runner', primarybg: '#0a0a0f', secondarybg: '#15152a', accentprimary: '#1a3a5a', accentsecondary: '#00aa88' },
+    dune: { name: 'Dune', primarybg: '#0d0a05', secondarybg: '#1a1410', accentprimary: '#4a4a2a', accentsecondary: '#d4a574' }
+};
+
+const timezones = [
+    { code: 'GMT', offset: 0 }, { code: 'EST', offset: -5 }, { code: 'PST', offset: -8 }, { code: 'IST', offset: 5.5 }, { code: 'JST', offset: 9 }
+];
+
+// ===== THREAT DATA =====
+const mockThreats = [
+    { id: 'THR-001', name: 'WinLocked.A', type: 'Ransomware', detectionMethod: 'Heuristic', riskLevel: 'Critical', detectedTime: '2025-11-14 18:32:45', status: 'Contained', entryPath: ['Network Share', 'USB Device', 'Email Attachment'], processId: '4521' },
+    { id: 'THR-002', name: 'Trojan.Generic.M', type: 'Trojan', detectionMethod: 'ML-Anomaly', riskLevel: 'High', detectedTime: '2025-11-14 17:15:22', status: 'Quarantined', entryPath: ['System Registry', 'API Hook'], processId: '3847' },
+    { id: 'THR-003', name: 'PUP.Adware.Bundle', type: 'PUP', detectionMethod: 'Heuristic', riskLevel: 'Medium', detectedTime: '2025-11-14 16:45:10', status: 'Monitoring', entryPath: ['Browser Extension', 'Installer'], processId: '2156' }
+];
+
+const mockProcesses = [
+    { name: 'svchost.exe', pid: 1024, user: 'SYSTEM', cpu: 2.3, memory: 8.5, diskIO: 0.1, category: 'System', riskLevel: 'Safe' },
+    { name: 'explorer.exe', pid: 5678, user: 'Admin', cpu: 5.2, memory: 156.3, diskIO: 1.2, category: 'System', riskLevel: 'Safe' },
+    { name: 'chrome.exe', pid: 8901, user: 'Admin', cpu: 15.4, memory: 452.7, diskIO: 2.1, category: 'User', riskLevel: 'Safe' },
+    { name: 'suspicious.exe', pid: 4521, user: 'Admin', cpu: 45.6, memory: 234.1, diskIO: 89.3, category: 'Suspicious', riskLevel: 'Critical' },
+    { name: 'firefox.exe', pid: 7234, user: 'Admin', cpu: 12.1, memory: 385.2, diskIO: 1.8, category: 'User', riskLevel: 'Safe' },
+];
+
+// ===== ATTACK SCENARIOS =====
+const virusScenarios = {
+    dll_injection: { name: 'DLL Injection Attack', description: 'Process hollowing and DLL injection', vectors: ['Process Injection', 'Thread Hijacking', 'Memory Modification'], entryPath: [{ step: '1. Identify Target Process', process: 'injector.exe', anomalyIncrease: 10 }, { step: '2. Allocate Memory', process: 'explorer.exe', anomalyIncrease: 15 }, { step: '3. Inject Malicious DLL', process: 'explorer.exe', anomalyIncrease: 35 }, { step: '4. Execute Payload', process: 'explorer.exe (compromised)', anomalyIncrease: 50 }] },
+    usb_entry: { name: 'USB Device Attack', description: 'Malware from external USB device', vectors: ['Autorun.inf', 'Direct File Copy', 'Shortcut Exploit'], entryPath: [{ step: '1. Detect USB Device', process: 'Windows Explorer', anomalyIncrease: 5 }, { step: '2. Mount File System', process: 'System', anomalyIncrease: 10 }, { step: '3. Execute Autorun Script', process: 'cmd.exe', anomalyIncrease: 30 }, { step: '4. Establish Persistence', process: 'rundll32.exe', anomalyIncrease: 40 }] },
+    registry_entry: { name: 'Registry Persistence Attack', description: 'Registry autostart malware injection', vectors: ['Registry Key', 'Run Key', 'Service Creation'], entryPath: [{ step: '1. Gain Initial Access', process: 'dropper.exe', anomalyIncrease: 20 }, { step: '2. Modify Registry', process: 'reg.exe', anomalyIncrease: 30 }, { step: '3. Create Autostart Entry', process: 'svchost.exe', anomalyIncrease: 25 }, { step: '4. Restart and Execute', process: 'malware_svc.exe', anomalyIncrease: 45 }] },
+    email_entry: { name: 'Email Attachment Attack', description: 'Phishing email with malicious attachment', vectors: ['Email Client', 'Macro Execution', 'File Download'], entryPath: [{ step: '1. Email Received', process: 'outlook.exe', anomalyIncrease: 2 }, { step: '2. Attachment Opened', process: 'winword.exe', anomalyIncrease: 15 }, { step: '3. Macro Execution', process: 'powershell.exe', anomalyIncrease: 35 }, { step: '4. Download Payload', process: 'malware.dll', anomalyIncrease: 50 }] },
+    network_entry: { name: 'Network Share Attack', description: 'Malware propagation via SMB network share', vectors: ['SMB Share', 'Network Drive', 'RPC Call'], entryPath: [{ step: '1. Enumerate Network Shares', process: 'explorer.exe', anomalyIncrease: 8 }, { step: '2. Access Shared Resource', process: 'System', anomalyIncrease: 12 }, { step: '3. Copy Malicious File', process: 'svchost.exe (hijacked)', anomalyIncrease: 25 }, { step: '4. Execute Payload', process: 'malware.exe', anomalyIncrease: 45 }] }
+};
+
+// ===== ML/AI DATA =====
+const featureImportance = [
+    { feature: 'Excessive File I/O', importance: 28.5 },
+    { feature: 'Registry Modification', importance: 22.1 },
+    { feature: 'Network to Blacklist IP', importance: 18.7 },
+    { feature: 'Process Injection', importance: 16.3 },
+    { feature: 'API Hook Detection', importance: 14.4 }
+];
+
+const malwareBehaviorPatterns = {
+    ransomware: ['File encryption operations', 'Master boot record modification', 'Registry key locking', 'Network isolation', 'Ransom note creation'],
+    trojan: ['C2 server communication', 'Privilege escalation attempts', 'Process injection', 'Registry persistence', 'Firewall rule modification'],
+    worm: ['Network share enumeration', 'Lateral movement attempts', 'Process replication', 'Self-propagation', 'Resource hogging'],
+    rootkit: ['Kernel memory modification', 'System service hijacking', 'Process hiding', 'Syscall table hooking', 'Driver installation']
+};
+
+const hidsSecurityGaps = [
+    { gap: 'Kernel-Level Verification', severity: 'Critical', description: 'System cannot fully verify kernel integrity without UEFI Secure Boot', mitigation: 'Implement Windows Signed Driver Policy and HVCI' },
+    { gap: 'Time-of-Check-Time-of-Use (TOCTOU)', severity: 'High', description: 'Race condition vulnerability in file monitoring', mitigation: 'Increase monitoring frequency to 50ms intervals' },
+    { gap: 'Direct Kernel Memory Access', severity: 'Critical', description: 'DMA attacks can bypass all software protections', mitigation: 'Enable IOMMU/VT-d protection and disable Thunderbolt DMA' }
+];
+
+const hardeningItems = [
+    { name: 'Windows Defender Integration', status: 'Active', recommendation: 'Active' },
+    { name: 'UEFI Secure Boot', status: 'Enabled', recommendation: 'Enabled' },
+    { name: 'Hyper-V Code Integrity', status: 'Enabled', recommendation: 'Enabled' },
+    { name: 'Data Execution Prevention', status: 'Enabled', recommendation: 'Enabled' },
+    { name: 'Address Space Layout Randomization', status: 'Enabled', recommendation: 'Enabled' },
+    { name: 'Control Flow Guard', status: 'Enabled', recommendation: 'Enabled' }
+];
+
+// ===== STATE VARIABLES =====
+let currentTheme = 'tech_noir';
+let currentTimezone = 'GMT';
+let currentProfile = 'vikrama';
+let charts = {};
+let systemMetrics = { cpuUsage: 28, ramUsage: 58, diskIOStatus: 35, systemHealth: 94 };
+
+// ===== INITIALIZATION =====
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("Privara HIDS v4.0 Initializing...");
+    setupNavigation();
+    updateTime();
+    setInterval(updateTime, 1000);
+    populateDashboard();
+    populateThreats();
+    populateProcesses();
+    populateAuditLog();
+    populateMLAnalysis();
+    populateHardening();
+    populateSecurityGaps();
+    initCharts();
+    loadSimulation('dll_injection');
+    console.log("Privara HIDS Ready.");
+});
+
+// ===== NAVIGATION =====
+function setupNavigation() {
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const viewName = link.getAttribute('data-view');
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            switchView(viewName);
+        });
+    });
+}
+
+function switchView(viewName) {
+    document.querySelectorAll('.view').forEach(view => {
+        view.classList.toggle('active', view.id === viewName + 'View');
+    });
+}
+
+// ===== TIME & DATE =====
+function updateTime() {
+    const tz = timezones.find(t => t.code === currentTimezone);
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const tzTime = new Date(utc + (3600000 * tz.offset));
+    document.getElementById('currentTime').textContent = tzTime.toLocaleTimeString('en-US', { hour12: false }) + ' ' + currentTimezone;
+    document.getElementById('currentDate').textContent = tzTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+// ===== DASHBOARD FUNCTIONS =====
+function populateDashboard() {
+    document.getElementById('osDisplay').textContent = 'Windows 11 x64';
+    document.getElementById('cpuUsageDisplay').textContent = systemMetrics.cpuUsage + '%';
+    document.getElementById('memoryUsageDisplay').textContent = systemMetrics.ramUsage + '%';
+    document.getElementById('diskIODisplay').textContent = systemMetrics.diskIOStatus + '%';
+    document.getElementById('systemHealth').textContent = systemMetrics.systemHealth + '%';
+    document.getElementById('activeThreats').textContent = mockThreats.filter(t => t.status === 'Contained').length;
+    document.getElementById('cpuBar').style.width = systemMetrics.cpuUsage + '%';
+    document.getElementById('memBar').style.width = systemMetrics.ramUsage + '%';
+    populateThreatTable();
+}
+
+function populateThreatTable() {
+    const tbody = document.getElementById('threatsTableBody');
+    tbody.innerHTML = mockThreats.map(t => `<tr><td>${t.id}</td><td>${t.name}</td><td>${t.type}</td><td><span class="badge badge-${t.riskLevel.toLowerCase()}">${t.riskLevel}</span></td><td>${t.detectedTime}</td><td><span class="badge badge-${t.status.toLowerCase()}">${t.status}</span></td></tr>`).join('');
+}
+
+function populateThreats() {
+    const tbody = document.getElementById('threatsDetailedTableBody');
+    tbody.innerHTML = mockThreats.map(t => `<tr><td>${t.id}</td><td>${t.name}</td><td>${t.type}</td><td>${t.detectionMethod}</td><td><span class="badge badge-${t.riskLevel.toLowerCase()}">${t.riskLevel}</span></td><td>${t.detectedTime}</td><td>${t.status}</td><td>${t.entryPath.join(', ')}</td></tr>`).join('');
+}
+
+function populateProcesses() {
+    const tbody = document.getElementById('processManagerTableBody');
+    tbody.innerHTML = mockProcesses.map(p => `<tr><td>${p.name}</td><td>${p.pid}</td><td>${p.user}</td><td>${p.cpu.toFixed(1)}</td><td>${p.memory.toFixed(1)}</td><td>${p.diskIO.toFixed(1)}</td><td>${p.category}</td><td><span class="badge badge-${p.riskLevel.toLowerCase()}">${p.riskLevel}</span></td><td><button class="btn btn-danger btn-sm" onclick="showToast('Process terminated', 'info')">Kill</button></td></tr>`).join('');
+}
+
+// ===== PROCESS FILTERING =====
+document.addEventListener('DOMContentLoaded', () => {
+    const filterSelect = document.getElementById('processFilter');
+    if (filterSelect) {
+        filterSelect.addEventListener('change', (e) => {
+            const filter = e.target.value;
+            const tbody = document.getElementById('processManagerTableBody');
+            if (filter === 'all') {
+                populateProcesses();
+            } else {
+                tbody.innerHTML = mockProcesses.filter(p => p.category.toLowerCase() === filter).map(p => `<tr><td>${p.name}</td><td>${p.pid}</td><td>${p.user}</td><td>${p.cpu.toFixed(1)}</td><td>${p.memory.toFixed(1)}</td><td>${p.diskIO.toFixed(1)}</td><td>${p.category}</td><td><span class="badge badge-${p.riskLevel.toLowerCase()}">${p.riskLevel}</span></td><td><button class="btn btn-danger btn-sm">Kill</button></td></tr>`).join('');
+            }
+        });
+    }
+});
+
+// ===== THREAT SIMULATION =====
+document.addEventListener('DOMContentLoaded', () => {
+    const scenarioSelect = document.getElementById('simulationScenario');
+    if (scenarioSelect) {
+        scenarioSelect.addEventListener('change', (e) => {
+            loadSimulation(e.target.value);
+        });
+    }
+});
+
+function loadSimulation(scenarioKey) {
+    const scenario = virusScenarios[scenarioKey];
+    if (scenario) drawSimplifiedGraph(scenario);
+}
+
+function drawSimplifiedGraph(scenario) {
+    const svg = document.getElementById('pathSvg');
+    const nodesContainer = document.getElementById('graphNodes');
+    const pathDetails = document.getElementById('pathDetails');
+
+    if (!svg || !nodesContainer || !pathDetails) return;
+
+    svg.innerHTML = '';
+    nodesContainer.innerHTML = '';
+    pathDetails.innerHTML = '';
+
+    const steps = scenario.entryPath || [];
+    if (!steps.length) return;
+
+    const width = svg.clientWidth || 800;
+    const height = 200;
+    const margin = 100;
+    const dx = steps.length > 1 ? (width - margin * 2) / (steps.length - 1) : 0;
+    const centerY = height / 2;
+
+    steps.forEach((step, i) => {
+        if (i < steps.length - 1) {
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            const x1 = margin + dx * i, x2 = margin + dx * (i + 1);
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', centerY);
+            line.setAttribute('x2', x2);
+            line.setAttribute('y2', centerY);
+            line.style.stroke = 'var(--border)';
+            line.style.strokeWidth = '2';
+            svg.appendChild(line);
+        }
+    });
+
+    const nodeElements = steps.map((step, i) => {
+        const x = margin + dx * i;
+        const el = document.createElement('div');
+        el.className = 'graph-node';
+        el.style.left = (x - 45) + 'px';
+        el.style.top = (centerY - 40) + 'px';
+        el.innerHTML = `<div style="font-weight:bold;font-size:10px;">Step ${i + 1}</div><div style="font-size:9px;">${step.process}</div><div style="font-size:8px;margin-top:4px;color:var(--warning);">+${step.anomalyIncrease}</div>`;
+        nodesContainer.appendChild(el);
+        return el;
+    });
+
+    let currentIndex = 0, cumulativeRisk = 0;
+    const totalRisk = steps.reduce((acc, s) => acc + s.anomalyIncrease, 0);
+
+    function animateStep() {
+        if (currentIndex >= steps.length) {
+            pathDetails.innerHTML = `<div class="detail-item"><span class="detail-label">Total Path Risk:</span><span class="detail-value">${totalRisk}</span></div><div class="detail-item"><span class="detail-label">Threat Level:</span><span class="detail-value">${totalRisk > 70 ? 'CRITICAL' : totalRisk > 40 ? 'HIGH' : 'MEDIUM'}</span></div>`;
+            return;
+        }
+        cumulativeRisk += steps[currentIndex].anomalyIncrease;
+        nodeElements[currentIndex].style.borderColor = 'var(--accent-secondary)';
+        nodeElements[currentIndex].style.backgroundColor = 'var(--accent-primary)';
+        nodeElements[currentIndex].style.transform = 'scale(1.08)';
+        pathDetails.innerHTML = `<div class="detail-item"><span class="detail-label">Current Step:</span><span class="detail-value">${currentIndex + 1} / ${steps.length}</span></div><div class="detail-item"><span class="detail-label">Cumulative Risk:</span><span class="detail-value">${cumulativeRisk}</span></div>`;
+        currentIndex++;
+        setTimeout(animateStep, 1200);
+    }
+    animateStep();
+}
+
+// ===== ML/AI ANALYSIS =====
+function populateMLAnalysis() {
+    // Feature Importance
+    const featureBody = document.getElementById('featureImportanceBody');
+    featureBody.innerHTML = featureImportance.map(f => `<tr><td>${f.feature}</td><td>${f.importance}%</td><td>${f.importance > 20 ? '🔴 High' : '🟡 Medium'}</td></tr>`).join('');
+
+    // Behavior Patterns
+    document.getElementById('ransomwarePatterns').innerHTML = malwareBehaviorPatterns.ransomware.map(p => `<li style="padding: 5px 0; color: var(--text-secondary); font-size: 12px;">• ${p}</li>`).join('');
+    document.getElementById('trojanPatterns').innerHTML = malwareBehaviorPatterns.trojan.map(p => `<li style="padding: 5px 0; color: var(--text-secondary); font-size: 12px;">• ${p}</li>`).join('');
+    document.getElementById('wormPatterns').innerHTML = malwareBehaviorPatterns.worm.map(p => `<li style="padding: 5px 0; color: var(--text-secondary); font-size: 12px;">• ${p}</li>`).join('');
+    document.getElementById('rootkitPatterns').innerHTML = malwareBehaviorPatterns.rootkit.map(p => `<li style="padding: 5px 0; color: var(--text-secondary); font-size: 12px;">• ${p}</li>`).join('');
+}
+
+function populateSecurityGaps() {
+    const gapsBody = document.getElementById('securityGapsBody');
+    gapsBody.innerHTML = hidsSecurityGaps.map(g => `<div style="background-color: var(--secondary-bg); padding: 15px; margin-bottom: 10px; border-left: 3px solid var(--critical); border-radius: 4px;"><h4 style="color: var(--critical); margin: 0 0 10px 0;">${g.gap}</h4><p style="color: var(--text-secondary); font-size: 12px; margin: 5px 0;"><strong>Severity:</strong> ${g.severity}</p><p style="color: var(--text-secondary); font-size: 12px; margin: 5px 0;">${g.description}</p><p style="color: var(--success); font-size: 12px; margin: 10px 0 0 0;"><strong>Mitigation:</strong> ${g.mitigation}</p></div>`).join('');
+}
+
+// ===== AUDIT LOG =====
+function populateAuditLog() {
+    const tbody = document.getElementById('auditLogTableBody');
+    const logs = [
+        { date: '2025-11-17', time: '08:01:22', user: 'Chandrahas', action: 'LOGIN_SUCCESS', details: 'User logged into dashboard.' },
+        { date: '2025-11-17', time: '08:00:15', user: 'SYSTEM', action: 'SERVICE_START', details: 'Privara HIDS Core Service started.' },
+        { date: '2025-11-17', time: '08:05:45', user: 'SYSTEM', action: 'THREAT_DETECTED', details: 'PowerShell execution detected.' },
+    ];
+    tbody.innerHTML = logs.map(log => `<tr><td>${log.date}</td><td>${log.time}</td><td>${log.user}</td><td>${log.action}</td><td>${log.details}</td></tr>`).join('');
+}
+
+// ===== HARDENING =====
+function populateHardening() {
+    const hardeningBody = document.querySelector('[id*="hardeningBody"]') || document.createElement('div');
+    const container = document.getElementById('hardeningView').querySelector('[id*="hardeningBody"]');
+    if (container) {
+        container.innerHTML = hardeningItems.map(item => `<div class="hardening-item active"><h4>${item.name}</h4><p style="color: var(--text-secondary); font-size: 12px;">Status: <span style="color: var(--success);">${item.status}</span></p></div>`).join('');
+    }
+}
+
+// ===== CHARTS =====
+function initCharts() {
+    const threatCtx = document.getElementById('threatsOverTimeChart')?.getContext('2d');
+    if (threatCtx) {
+        charts.threats = new Chart(threatCtx, {
+            type: 'line',
+            data: { labels: ['-6h', '-3h', '-1h', 'Now'], datasets: [{ label: 'Threats', data: [5, 8, 3, 2], borderColor: 'var(--critical)', backgroundColor: 'rgba(210, 74, 74, 0.1)', tension: 0.4, fill: true }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: 'var(--text-primary)' } } }, scales: { x: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { ticks: { color: 'var(--text-secondary)' }, grid: { color: 'rgba(255,255,255,0.05)' } } } }
+        });
+    }
+
+    const cpuCtx = document.getElementById('cpuUsageChart')?.getContext('2d');
+    if (cpuCtx) {
+        charts.cpu = new Chart(cpuCtx, {
+            type: 'doughnut',
+            data: { labels: ['Used', 'Free'], datasets: [{ data: [systemMetrics.cpuUsage, 100 - systemMetrics.cpuUsage], backgroundColor: ['var(--accent-secondary)', 'rgba(100,100,100,0.2)'], borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+    }
+
+    const memCtx = document.getElementById('memoryUsageChart')?.getContext('2d');
+    if (memCtx) {
+        charts.memory = new Chart(memCtx, {
+            type: 'doughnut',
+            data: { labels: ['Used', 'Free'], datasets: [{ data: [systemMetrics.ramUsage, 100 - systemMetrics.ramUsage], backgroundColor: ['#8a6a2a', 'rgba(100,100,100,0.2)'], borderWidth: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+    }
+}
+
+// ===== PROFILE & THEME SWITCHING =====
+function switchProfile(profileKey) {
+    currentProfile = profileKey;
+    const profile = profiles[profileKey];
+    document.getElementById('profileBanner').textContent = `Profile: ${profile.name} (${profile.description.split(' - ')[1] || 'Custom'})`;
+    showToast(`Switched to ${profile.name} profile`, 'info');
+}
+
+function switchTheme(themeKey) {
+    currentTheme = themeKey;
+    showToast(`Switched to ${themes[themeKey].name} theme`, 'info');
+}
+
+function switchTimezone(tzCode) {
+    currentTimezone = tzCode;
+    updateTime();
+    showToast(`Timezone changed to ${tzCode}`, 'info');
+}
+
+// ===== CONFIGURATION =====
+function validateConfig() { showToast('Configuration is valid', 'success'); }
+function loadConfig() { showToast('Configuration loaded', 'info'); }
+function saveConfig() { showToast('Configuration saved', 'success'); }
+function downloadConfig() { showToast('Configuration downloaded', 'info'); }
+function queryLogs() { showToast('Logs queried successfully', 'info'); }
+function exportCSV() { showToast('Exporting to CSV...', 'info'); }
+function exportJSON() { showToast('Exporting to JSON...', 'info'); }
+
+// ===== BUG REPORTING =====
+function submitBugReport() {
+    const title = document.getElementById('bugTitle').value.trim();
+    const description = document.getElementById('bugDescription').value.trim();
+    if (!title || !description) { showToast('Please fill in all required fields', 'error'); return; }
+    document.getElementById('bugReportStatus').innerHTML = '<span style="color: var(--success);">✓ Bug report submitted successfully. Reference ID: BUG-2025-' + Math.random().toString(36).substr(2, 9).toUpperCase() + '</span>';
+    showToast('Bug report submitted', 'success');
+}
+
+// ===== UTILITIES =====
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => toast.style.opacity = '1', 50);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => container.removeChild(toast), 400);
+    }, 3500);
+}
+
+</script>
+
+</body>
+</html>
