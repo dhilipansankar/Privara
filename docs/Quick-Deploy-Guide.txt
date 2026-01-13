@@ -1,10 +1,5 @@
-# Privara Enterprise HIDS - Quick Setup Guide
 
-## 🎯 GITHUB UPLOAD & DEPLOYMENT - QUICK START
-
-### **STEP 1: PREPARE GITHUB REPOSITORY**
-
-```bash
+BASH
 # Initialize git and push to GitHub
 cd privara-hids
 
@@ -182,9 +177,7 @@ mvn package -P windows-installer
 
 ---
 
-## 🔐 GITHUB REPOSITORY ESSENTIALS
 
-### **File Structure on GitHub**
 
 ```
 privara-hids/
@@ -386,93 +379,5 @@ Settings:
 ├── Timezone Configuration
 ├── GDPR Data Controls
 └── Bug Reporting System
-```
 
----
 
-## 🔗 GITHUB REPOSITORY LINKS
-
-**Replace `[REPO_LINK_PLACEHOLDER]` with:**
-```
-https://github.com/YOUR_USERNAME/privara-hids
-```
-
-**Key Links:**
-- **Main Repo:** https://github.com/YOUR_USERNAME/privara-hids
-- **Releases:** https://github.com/YOUR_USERNAME/privara-hids/releases
-- **Issues:** https://github.com/YOUR_USERNAME/privara-hids/issues
-- **Documentation:** https://github.com/YOUR_USERNAME/privara-hids/tree/main/docs
-- **Wiki:** https://github.com/YOUR_USERNAME/privara-hids/wiki
-- **Security Policy:** https://github.com/YOUR_USERNAME/privara-hids/blob/main/SECURITY.md
-
----
-
-## 🎓 DEPLOYMENT TIMELINE
-
-```
-Day 1: Push to GitHub
-├─ Initialize repository
-├─ Upload all documentation
-├─ Configure GitHub Actions
-└─ Set up releases page
-
-Day 2: Build Release Artifacts
-├─ Maven build JAR
-├─ NSIS build .exe
-├─ Code signing
-└─ Generate hash verification
-
-Day 3: Create GitHub Release
-├─ Tag version (v1.0.0)
-├─ Upload .exe and hash
-├─ Publish release notes
-└─ Create shields/badges
-
-Day 4: Internal Testing
-├─ Test on Windows 10/11
-├─ Verify code signature
-├─ Test silent installation
-└─ Validate SQLite database
-
-Day 5: Production Rollout
-├─ Deploy to pilot group (5% users)
-├─ Monitor for issues
-├─ Scale to 50% if stable
-└─ Full rollout to 100%
-
-Week 2: Monitoring & Updates
-├─ Monitor GitHub issues
-├─ Apply security patches
-├─ Collect telemetry
-└─ Plan v1.1.0 features
-```
-
----
-
-## 📞 SUPPORT & MAINTENANCE
-
-**For Users:**
-- GitHub Issues for bug reports
-- Documentation: https://github.com/privara-hids/privara-hids/docs
-- Release Notes for upgrade information
-
-**For Administrators:**
-- Deployment guide: `docs/DEPLOYMENT.md`
-- Configuration templates: `config/`
-- Troubleshooting: `docs/TROUBLESHOOTING.md`
-
-**For Developers:**
-- Contributing guidelines: `CONTRIBUTING.md`
-- API documentation: `docs/API_REFERENCE.md`
-- Build instructions: `README.md`
-
----
-
-**🎯 You're all set to deploy Privara Enterprise HIDS!**
-
-Next steps:
-1. Push code to GitHub
-2. Build .exe installer
-3. Create release on GitHub
-4. Share download link with users
-5. Monitor and support installations
