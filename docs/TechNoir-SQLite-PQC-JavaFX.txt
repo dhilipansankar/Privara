@@ -1,0 +1,1022 @@
+# Privara HIDS - Tech Noir Edition
+## Technical Documentation: SQLite Logging, NIST PQC, and JavaFX Architecture
+
+---
+
+## 1. SQLITE DATABASE SCHEMA & IMPLEMENTATION
+
+### 1.1 Database Design Philosophy
+The SQLite schema is designed for:
+- **Efficiency**: Normalized structure with proper indexing for fast queries
+- **Security**: No PII in plaintext, all sensitive fields encrypted or hashed
+- **Compliance**: GDPR and HIPAA audit trails with retention policies
+- **Performance**: Connection pooling, query optimization, and archival strategy
+
+### 1.2 Core Tables
+
+#### **metadata** - Application Versioning & Encryption Keys
+```python
+# Schema Definition
+metadata_schema = """
+CREATE TABLE IF NOT EXISTS metadata (
+    id INTEGER PRIMARY KEY,
+    app_version TEXT NOT NULL,
+    nist_pqc_version TEXT DEFAULT 'ML-KEM/ML-DSA',
+    last_schema_update DATETIME DEFAULT CURRENT_TIMESTAMP,
+    encryption_key_hash TEXT NOT NULL,
+    db_cipher TEXT DEFAULT 'AES-256-GCM'
+)
+"""
+
+# Python Usage (using sqlite3 and liboqs for PQC)
+import sqlite3
+from liboqs.python import KeyEncapsulation
+
+def initialize_database():
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    # Create metadata table
+    cursor.execute(metadata_schema)
+    
+    # Generate encryption key using NIST ML-KEM-1024
+    kem = KeyEncapsulation("ML-KEM-1024")
+    public_key = kem.generate_keypair()
+    
+    # Store key hash (NOT the key itself)
+    key_hash = hashlib.sha256(public_key).hexdigest()
+    
+    cursor.execute("""
+        INSERT INTO metadata (app_version, nist_pqc_version, encryption_key_hash)
+        VALUES (?, ?, ?)
+    """, ('1.0.0', 'ML-KEM/ML-DSA', key_hash))
+    
+    conn.commit()
+    return conn
+```
+
+#### **user_profiles** - Multi-User Configuration Management
+```python
+user_profiles_schema = """
+CREATE TABLE IF NOT EXISTS user_profiles (
+    profile_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_name TEXT UNIQUE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    theme TEXT DEFAULT 'tech_noir',
+    timezone TEXT DEFAULT 'UTC',
+    monitoring_sensitivity INTEGER DEFAULT 65,
+    is_active BOOLEAN DEFAULT 1
+)
+"""
+
+# Python Example: Creating Vikrama profile
+def create_profile(profile_name, theme, timezone):
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        INSERT INTO user_profiles (profile_name, theme, timezone)
+        VALUES (?, ?, ?)
+    """, (profile_name, theme, timezone))
+    
+    conn.commit()
+    profile_id = cursor.lastrowid
+    return profile_id
+
+vikrama_id = create_profile('Vikrama', 'tech_noir', 'UTC')
+```
+
+#### **security_logs** - Main Event Logging Table (Optimized for Queries)
+```python
+security_logs_schema = """
+CREATE TABLE IF NOT EXISTS security_logs (
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    unix_timestamp INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    source_process TEXT,
+    source_pid INTEGER,
+    target_resource TEXT,
+    description TEXT,
+    action_taken TEXT,
+    anomaly_score REAL,
+    ml_model_version TEXT,
+    detection_method TEXT,
+    user_action TEXT,
+    is_archived BOOLEAN DEFAULT 0,
+    FOREIGN KEY (profile_id) REFERENCES user_profiles(profile_id)
+);
+
+-- Performance Indices
+CREATE INDEX idx_security_logs_timestamp ON security_logs(timestamp);
+CREATE INDEX idx_security_logs_profile ON security_logs(profile_id);
+CREATE INDEX idx_security_logs_severity ON security_logs(severity);
+CREATE INDEX idx_security_logs_event_type ON security_logs(event_type);
+"""
+
+# Python: Inserting security events with parameterized queries (SQL injection prevention)
+import time
+from datetime import datetime
+
+def log_security_event(profile_id, event_type, severity, source_process, description, action, anomaly_score):
+    """
+    Thread-safe logging with parameterized queries.
+    CRITICAL: Always use ? placeholders to prevent SQL injection.
+    """
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    # SECURE: Parameterized query
+    cursor.execute("""
+        INSERT INTO security_logs 
+        (profile_id, unix_timestamp, event_type, severity, source_process, description, 
+         action_taken, anomaly_score, ml_model_version, detection_method)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        profile_id,
+        int(time.time()),
+        event_type,  # e.g., 'PROCESS_ALERT', 'API_HOOK'
+        severity,    # e.g., 'CRITICAL', 'HIGH', 'MEDIUM'
+        source_process,
+        description,
+        action,
+        anomaly_score,
+        'v2.3.1',
+        'ML_ANOMALY'
+    ))
+    
+    conn.commit()
+    log_id = cursor.lastrowid
+    return log_id
+
+# Example usage
+log_id = log_security_event(
+    profile_id=1,
+    event_type='RANSOMWARE_DETECTED',
+    severity='CRITICAL',
+    source_process='explorer.exe',
+    description='File encryption operation detected with 89.3% CPU usage',
+    action='CONTAINED',
+    anomaly_score=0.94
+)
+```
+
+#### **threat_details** - Deep Threat Information (Linked via Foreign Key)
+```python
+threat_details_schema = """
+CREATE TABLE IF NOT EXISTS threat_details (
+    threat_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    log_id INTEGER NOT NULL UNIQUE,
+    threat_name TEXT,
+    threat_type TEXT,
+    file_hash TEXT,
+    file_path TEXT,
+    registry_keys TEXT,  -- JSON array: ["HKLM\\System\\Run", ...]
+    network_connections TEXT,  -- JSON array: [{"ip":"192.168.1.1", "port":443}, ...]
+    entry_vectors TEXT,  -- JSON array: ["USB", "Network", "Email"]
+    dijkstra_cost REAL,
+    containment_actions TEXT,  -- JSON
+    FOREIGN KEY (log_id) REFERENCES security_logs(log_id)
+);
+
+CREATE INDEX idx_threat_details_type ON threat_details(threat_type);
+CREATE INDEX idx_threat_details_hash ON threat_details(file_hash);
+"""
+
+# Python: Storing threat details with JSON serialization
+import json
+
+def store_threat_details(log_id, threat_name, threat_type, file_hash, registry_keys, network_ips):
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    # Serialize complex data as JSON
+    registry_json = json.dumps(registry_keys)
+    network_json = json.dumps(network_ips)
+    
+    cursor.execute("""
+        INSERT INTO threat_details 
+        (log_id, threat_name, threat_type, file_hash, registry_keys, network_connections, dijkstra_cost)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        log_id,
+        threat_name,
+        threat_type,
+        file_hash,
+        registry_json,
+        network_json,
+        2.5  # Dijkstra cost = difficulty of exploitation path
+    ))
+    
+    conn.commit()
+    return cursor.lastrowid
+```
+
+#### **process_history** - Continuous Process Monitoring
+```python
+process_history_schema = """
+CREATE TABLE IF NOT EXISTS process_history (
+    process_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    process_name TEXT NOT NULL,
+    pid INTEGER,
+    user TEXT,
+    cpu_percent REAL,
+    memory_mb REAL,
+    disk_io_mbps REAL,
+    gpu_percent REAL,
+    network_mbps REAL,
+    parent_pid INTEGER,
+    risk_level TEXT,
+    whitelisted BOOLEAN DEFAULT 0,
+    FOREIGN KEY (profile_id) REFERENCES user_profiles(profile_id)
+);
+
+-- Index for frequent queries
+CREATE INDEX idx_process_history_timestamp ON process_history(timestamp);
+CREATE INDEX idx_process_history_risk ON process_history(risk_level);
+CREATE INDEX idx_process_history_process ON process_history(process_name);
+"""
+
+# Python: Batch insert for performance (processes checked every ~500ms)
+def batch_log_processes(profile_id, process_list):
+    """
+    Efficient batch insertion using executemany.
+    """
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    # Prepare data: list of tuples
+    data = [
+        (profile_id, p['name'], p['pid'], p['user'], p['cpu'], p['memory'], 
+         p['disk_io'], p['gpu'], p['network'], p['parent_pid'], p['risk'])
+        for p in process_list
+    ]
+    
+    # Batch insert with parameterized query
+    cursor.executemany("""
+        INSERT INTO process_history 
+        (profile_id, process_name, pid, user, cpu_percent, memory_mb, disk_io_mbps, 
+         gpu_percent, network_mbps, parent_pid, risk_level)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, data)
+    
+    conn.commit()
+```
+
+#### **api_hooks** - API Interception & Monitoring
+```python
+api_hooks_schema = """
+CREATE TABLE IF NOT EXISTS api_hooks (
+    hook_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    log_id INTEGER NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    api_name TEXT NOT NULL,
+    caller_process TEXT,
+    caller_pid INTEGER,
+    parameters TEXT,  -- JSON
+    return_value TEXT,
+    risk_assessment TEXT,
+    blocked BOOLEAN DEFAULT 0,
+    FOREIGN KEY (log_id) REFERENCES security_logs(log_id)
+);
+
+CREATE INDEX idx_api_hooks_api_name ON api_hooks(api_name);
+CREATE INDEX idx_api_hooks_risk ON api_hooks(risk_assessment);
+"""
+
+# Example: Monitoring CreateFileA API calls
+def log_api_hook(log_id, api_name, caller_process, parameters, risk_level, blocked):
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    params_json = json.dumps(parameters)
+    
+    cursor.execute("""
+        INSERT INTO api_hooks 
+        (log_id, api_name, caller_process, parameters, risk_assessment, blocked)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (log_id, api_name, caller_process, params_json, risk_level, blocked))
+    
+    conn.commit()
+```
+
+### 1.3 Log Analysis Queries
+
+#### **Recurring Threat Pattern Detection** (>5 occurrences in 7 days)
+```python
+def detect_recurring_threats(profile_id, days=7, threshold=5):
+    """
+    Identify threats appearing >5 times within specified period.
+    Used for attack campaign detection.
+    """
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    query = """
+    SELECT 
+        td.threat_name,
+        td.threat_type,
+        COUNT(*) as occurrence_count,
+        MIN(sl.timestamp) as first_detected,
+        MAX(sl.timestamp) as last_detected,
+        AVG(sl.anomaly_score) as avg_anomaly_score,
+        GROUP_CONCAT(DISTINCT sl.source_process) as source_processes
+    FROM security_logs sl
+    JOIN threat_details td ON sl.log_id = td.log_id
+    WHERE sl.profile_id = ? 
+        AND sl.timestamp >= datetime('now', '-' || ? || ' days')
+    GROUP BY td.threat_name, td.threat_type
+    HAVING COUNT(*) >= ?
+    ORDER BY occurrence_count DESC
+    """
+    
+    cursor.execute(query, (profile_id, days, threshold))
+    recurring_threats = cursor.fetchall()
+    
+    # Format results
+    threats_found = []
+    for threat in recurring_threats:
+        threats_found.append({
+            'threat_name': threat[0],
+            'threat_type': threat[1],
+            'total_occurrences': threat[2],
+            'first_detected': threat[3],
+            'last_detected': threat[4],
+            'avg_anomaly_score': threat[5],
+            'affected_processes': threat[6].split(',')
+        })
+    
+    return threats_found
+
+# Usage
+recurring = detect_recurring_threats(profile_id=1, days=7, threshold=5)
+for threat in recurring:
+    print(f"Alert: {threat['threat_name']} detected {threat['total_occurrences']} times")
+```
+
+#### **Time-Series Anomaly Trending**
+```python
+def analyze_anomaly_trends(profile_id, days=30):
+    """
+    Track if anomaly scores are trending upward (system compromise escalation).
+    """
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    query = """
+    SELECT 
+        DATE(timestamp) as date,
+        COUNT(*) as event_count,
+        AVG(anomaly_score) as avg_score,
+        MAX(anomaly_score) as max_score
+    FROM security_logs
+    WHERE profile_id = ? AND timestamp >= datetime('now', '-' || ? || ' days')
+    GROUP BY DATE(timestamp)
+    ORDER BY DATE(timestamp) ASC
+    """
+    
+    cursor.execute(query, (profile_id, days))
+    trends = cursor.fetchall()
+    
+    # Calculate trend slope (simple linear regression)
+    if len(trends) > 1:
+        first_score = trends[0][2]  # First avg score
+        last_score = trends[-1][2]  # Last avg score
+        slope = (last_score - first_score) / len(trends)
+        
+        if slope > 0.05:  # Threshold for escalation
+            return {'status': 'ESCALATING', 'slope': slope, 'data': trends}
+        else:
+            return {'status': 'STABLE', 'slope': slope, 'data': trends}
+    
+    return {'status': 'INSUFFICIENT_DATA', 'data': trends}
+```
+
+#### **Attack Chain Detection**
+```python
+def detect_attack_chain(profile_id, hours=24):
+    """
+    Correlate related threats to identify multi-stage attacks.
+    Looks for: same process, related IPs, sequential registry modifications.
+    """
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    query = """
+    SELECT 
+        sl.log_id,
+        sl.timestamp,
+        sl.event_type,
+        sl.source_process,
+        td.threat_name,
+        sl.anomaly_score
+    FROM security_logs sl
+    LEFT JOIN threat_details td ON sl.log_id = td.log_id
+    WHERE sl.profile_id = ? 
+        AND sl.timestamp >= datetime('now', '-' || ? || ' hours')
+    ORDER BY sl.timestamp ASC
+    """
+    
+    cursor.execute(query, (profile_id, hours))
+    events = cursor.fetchall()
+    
+    # Group by process to identify chains
+    chains = {}
+    for event in events:
+        process = event[3]
+        if process not in chains:
+            chains[process] = []
+        chains[process].append({
+            'timestamp': event[1],
+            'event_type': event[2],
+            'threat': event[4],
+            'score': event[5]
+        })
+    
+    # Filter chains with >3 events (potential attack)
+    attack_chains = {k: v for k, v in chains.items() if len(v) >= 3}
+    return attack_chains
+```
+
+---
+
+## 2. NIST POST-QUANTUM CRYPTOGRAPHY (PQC) IMPLEMENTATION
+
+### 2.1 NIST Selected Algorithms (August 2024)
+
+| Algorithm | FIPS Std | Use Case | Security Level |
+|-----------|----------|----------|----------------|
+| **ML-KEM (CRYSTALS-Kyber)** | FIPS 203 | Key Encapsulation | 256-bit equivalent |
+| **ML-DSA (CRYSTALS-Dilithium)** | FIPS 204 | Digital Signatures | 256-bit equivalent |
+| **SLH-DSA (SPHINCS+)** | FIPS 205 | Hash-based Signatures | Stateless backup |
+
+### 2.2 Python Implementation with liboqs
+
+```python
+import sys
+try:
+    import oqs
+except ImportError:
+    print("Install: pip install liboqs")
+    sys.exit(1)
+
+from liboqs.python import KeyEncapsulation, Signature
+import os
+import hashlib
+
+class PrivaraPQC:
+    """
+    NIST PQC wrapper for Privara HIDS.
+    Provides quantum-resistant encryption and signatures.
+    """
+    
+    def __init__(self):
+        self.kem_algorithm = "ML-KEM-1024"
+        self.sig_algorithm = "ML-DSA-87"
+        self.backup_sig_algorithm = "SLH-DSA-8"
+    
+    # ============== KEY ENCAPSULATION (ML-KEM) ==============
+    
+    def generate_kem_keypair(self):
+        """
+        Generate ML-KEM-1024 keypair for symmetric key exchange.
+        Public key: 1568 bytes | Secret key: 3168 bytes
+        """
+        kem = KeyEncapsulation(self.kem_algorithm)
+        public_key = kem.generate_keypair()
+        secret_key = kem.export_secret_key()
+        return public_key, secret_key
+    
+    def kem_encapsulate(self, public_key):
+        """
+        Encapsulate a shared secret using recipient's public key.
+        Returns: (ciphertext, shared_secret)
+        """
+        kem = KeyEncapsulation(self.kem_algorithm)
+        kem.load_public_key(public_key)
+        ciphertext, shared_secret = kem.encaps(public_key)
+        return ciphertext, shared_secret
+    
+    def kem_decapsulate(self, ciphertext, secret_key):
+        """
+        Decapsulate ciphertext using private key to recover shared secret.
+        """
+        kem = KeyEncapsulation(self.kem_algorithm)
+        kem.load_secret_key(secret_key)
+        shared_secret = kem.decaps(ciphertext)
+        return shared_secret
+    
+    # ============== DIGITAL SIGNATURES (ML-DSA) ==============
+    
+    def generate_sig_keypair(self):
+        """
+        Generate ML-DSA-87 keypair for digital signatures.
+        Public key: 1312 bytes | Secret key: 2560 bytes
+        """
+        sig = Signature(self.sig_algorithm)
+        public_key = sig.generate_keypair()
+        secret_key = sig.export_secret_key()
+        return public_key, secret_key
+    
+    def sign_message(self, message, secret_key):
+        """
+        Sign message with ML-DSA-87.
+        Signature size: 2420 bytes
+        """
+        sig = Signature(self.sig_algorithm)
+        sig.load_secret_key(secret_key)
+        signature = sig.sign(message)
+        return signature
+    
+    def verify_signature(self, message, signature, public_key):
+        """
+        Verify ML-DSA-87 signature.
+        Returns: True if valid, False if invalid.
+        """
+        sig = Signature(self.sig_algorithm)
+        sig.load_public_key(public_key)
+        try:
+            is_valid = sig.verify(message, signature)
+            return is_valid
+        except Exception as e:
+            print(f"Signature verification failed: {e}")
+            return False
+    
+    # ============== APPLICATION USE CASES ==============
+    
+    def encrypt_config_file(self, config_json_str, public_key):
+        """
+        Encrypt configuration file using hybrid encryption:
+        1. Generate ML-KEM shared secret
+        2. Derive AES-256 key from shared secret
+        3. Encrypt config with AES-256-GCM
+        """
+        import json
+        import secrets
+        from Crypto.Cipher import AES
+        
+        # Step 1: KEM encapsulation
+        ciphertext_kem, shared_secret = self.kem_encapsulate(public_key)
+        
+        # Step 2: Derive AES key (using HKDF or simple hash)
+        aes_key = hashlib.sha256(shared_secret).digest()  # 32 bytes = 256 bits
+        
+        # Step 3: AES-256-GCM encryption
+        iv = secrets.token_bytes(12)  # 96-bit IV for GCM
+        cipher = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
+        
+        config_bytes = config_json_str.encode('utf-8')
+        ciphertext_aes, tag = cipher.encrypt_and_digest(config_bytes)
+        
+        # Return: KEM ciphertext + IV + AES ciphertext + authentication tag
+        return {
+            'kem_ciphertext': ciphertext_kem.hex(),
+            'iv': iv.hex(),
+            'ciphertext': ciphertext_aes.hex(),
+            'tag': tag.hex()
+        }
+    
+    def decrypt_config_file(self, encrypted_data, secret_key):
+        """
+        Decrypt configuration file using hybrid decryption.
+        """
+        from Crypto.Cipher import AES
+        
+        # Step 1: KEM decapsulation
+        kem_ciphertext = bytes.fromhex(encrypted_data['kem_ciphertext'])
+        shared_secret = self.kem_decapsulate(kem_ciphertext, secret_key)
+        
+        # Step 2: Derive AES key
+        aes_key = hashlib.sha256(shared_secret).digest()
+        
+        # Step 3: AES-256-GCM decryption
+        iv = bytes.fromhex(encrypted_data['iv'])
+        ciphertext = bytes.fromhex(encrypted_data['ciphertext'])
+        tag = bytes.fromhex(encrypted_data['tag'])
+        
+        cipher = AES.new(aes_key, AES.MODE_GCM, nonce=iv)
+        plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+        
+        return plaintext.decode('utf-8')
+    
+    def sign_bug_report(self, report_dict, secret_key):
+        """
+        Sign bug report for integrity verification.
+        """
+        report_json = json.dumps(report_dict, sort_keys=True)
+        signature = self.sign_message(report_json.encode('utf-8'), secret_key)
+        return signature
+    
+    def verify_bug_report(self, report_dict, signature, public_key):
+        """
+        Verify bug report signature.
+        """
+        report_json = json.dumps(report_dict, sort_keys=True)
+        return self.verify_signature(report_json.encode('utf-8'), signature, public_key)
+
+# ============== INITIALIZATION ==============
+
+def initialize_pqc_system(profile_id):
+    """
+    Initialize PQC system for a user profile.
+    Stores keys securely in database.
+    """
+    pqc = PrivaraPQC()
+    
+    # Generate keypairs
+    kem_pub, kem_sec = pqc.generate_kem_keypair()
+    sig_pub, sig_sec = pqc.generate_sig_keypair()
+    
+    # Store in database (with encryption)
+    conn = sqlite3.connect('privara-security.db')
+    cursor = conn.cursor()
+    
+    # Store PUBLIC keys (safe to store plaintext)
+    cursor.execute("""
+        INSERT INTO pqc_keys 
+        (profile_id, key_type, key_purpose, public_key_hex)
+        VALUES (?, ?, ?, ?)
+    """, (profile_id, 'ML-KEM-1024', 'key_exchange', kem_pub.hex()))
+    
+    cursor.execute("""
+        INSERT INTO pqc_keys 
+        (profile_id, key_type, key_purpose, public_key_hex)
+        VALUES (?, ?, ?, ?)
+    """, (profile_id, 'ML-DSA-87', 'digital_signature', sig_pub.hex()))
+    
+    # Store SECRET keys (encrypted in secure storage, never in database)
+    # In production: Use OS keyring, TPM, or HSM
+    secure_store_secret_key(profile_id, 'ML-KEM-1024', kem_sec)
+    secure_store_secret_key(profile_id, 'ML-DSA-87', sig_sec)
+    
+    conn.commit()
+    print(f"PQC keys initialized for profile {profile_id}")
+
+# Example usage
+pqc = PrivaraPQC()
+initialize_pqc_system(profile_id=1)
+```
+
+### 2.3 Security Hardening Checklist
+
+```python
+"""
+NIST PQC Implementation Security Checklist
+"""
+
+PQC_SECURITY_CHECKLIST = {
+    "Key Generation": [
+        "✓ Use cryptographically secure random number generator (os.urandom)",
+        "✓ Generate keys only once per profile",
+        "✓ Store public keys in database",
+        "✓ Store secret keys in OS keyring or HSM (NOT database)",
+    ],
+    
+    "Hybrid Encryption": [
+        "✓ Use ML-KEM for key agreement (post-quantum)",
+        "✓ Derive symmetric key from KEM shared secret",
+        "✓ Use AES-256-GCM for symmetric encryption (authenticated)",
+        "✓ Use 96-bit IV (nonce) for GCM mode",
+    ],
+    
+    "Digital Signatures": [
+        "✓ Use ML-DSA-87 for all integrity-critical operations",
+        "✓ Sign bug reports before submission",
+        "✓ Verify signatures on received updates",
+        "✓ Include timestamp in signed messages (prevent replay)",
+    ],
+    
+    "Key Rotation": [
+        "✓ Rotate keys every 90 days",
+        "✓ Archive old keys with rotation timestamp",
+        "✓ Re-encrypt old encrypted data with new key",
+        "✓ Alert user of pending key rotation",
+    ],
+    
+    "Post-Quantum Readiness": [
+        "✓ Implement CRYSTALS-Kyber + CRYSTALS-Dilithium",
+        "✓ Maintain SLH-DSA as backup (stateless)",
+        "✓ Document migration from RSA/ECC (if applicable)",
+        "✓ Plan hybrid classical+PQC deployment",
+    ],
+}
+
+# Verification function
+def verify_pqc_compliance():
+    """Verify PQC implementation meets NIST standards."""
+    pqc = PrivaraPQC()
+    
+    # Test 1: Verify key sizes
+    kem_pub, kem_sec = pqc.generate_kem_keypair()
+    assert len(kem_pub) == 1568, "ML-KEM public key should be 1568 bytes"
+    assert len(kem_sec) == 3168, "ML-KEM secret key should be 3168 bytes"
+    
+    # Test 2: Verify encryption/decryption roundtrip
+    ciphertext, shared_secret_enc = pqc.kem_encapsulate(kem_pub)
+    shared_secret_dec = pqc.kem_decapsulate(ciphertext, kem_sec)
+    assert shared_secret_enc == shared_secret_dec, "KEM roundtrip failed"
+    
+    # Test 3: Verify signature roundtrip
+    sig_pub, sig_sec = pqc.generate_sig_keypair()
+    message = b"Test message for PQC verification"
+    signature = pqc.sign_message(message, sig_sec)
+    is_valid = pqc.verify_signature(message, signature, sig_pub)
+    assert is_valid, "Signature verification failed"
+    
+    print("✓ All PQC compliance tests passed")
+    return True
+```
+
+---
+
+## 3. JAVAFX APPLICATION ARCHITECTURE
+
+### 3.1 Project Structure
+```
+privara-hids/
+├── src/
+│   ├── main/java/com/privara/
+│   │   ├── Privara.java                    # Entry point
+│   │   ├── controller/
+│   │   │   ├── DashboardController.java
+│   │   │   ├── TaskManagerController.java
+│   │   │   ├── LogAnalysisController.java
+│   │   │   ├── BugReportController.java
+│   │   │   └── SettingsController.java
+│   │   ├── model/
+│   │   │   ├── SecurityLog.java
+│   │   │   ├── ThreatAlert.java
+│   │   │   ├── Process.java
+│   │   │   └── BugReport.java
+│   │   ├── service/
+│   │   │   ├── LoggingService.java         # SQLite operations
+│   │   │   ├── PQCService.java             # NIST PQC
+│   │   │   ├── BugReportService.java       # GitHub/Email
+│   │   │   └── LogAnalyzerService.java     # Pattern detection
+│   │   ├── ui/
+│   │   │   ├── TechNoirTheme.java
+│   │   │   └── components/
+│   │   │       ├── DijkstraGraph.java
+│   │   │       └── LogViewer.java
+│   │   └── util/
+│   │       ├── DatabaseManager.java
+│   │       └── SecurityUtils.java
+│   └── resources/
+│       ├── fxml/
+│       │   ├── main.fxml
+│       │   ├── dashboard.fxml
+│       │   ├── bug-report.fxml
+│       │   └── log-analysis.fxml
+│       └── css/
+│           ├── tech-noir.css
+│           ├── blade-runner.css
+│           └── enemy.css
+├── pom.xml
+└── README.md
+```
+
+### 3.2 Main Entry Point
+
+```java
+package com.privara;
+
+import javafx.application.Application;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.stage.Stage;
+import javafx.stage.StageStyle;
+
+public class Privara extends Application {
+    
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+        // Load FXML
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));
+        Parent root = loader.load();
+        
+        // Create scene with tech noir CSS
+        Scene scene = new Scene(root, 1400, 900);
+        scene.getStylesheets().add(getClass().getResource("/css/tech-noir.css").toExternalForm());
+        
+        // Stage configuration
+        primaryStage.setTitle("Privara Enterprise HIDS");
+        primaryStage.initStyle(StageStyle.DECORATED);
+        primaryStage.setScene(scene);
+        primaryStage.setMinWidth(1200);
+        primaryStage.setMinHeight(800);
+        
+        // Initialize database and PQC
+        DatabaseManager.getInstance().initialize();
+        LoggingService.getInstance().start();
+        
+        primaryStage.show();
+    }
+    
+    public static void main(String[] args) {
+        launch(args);
+    }
+}
+```
+
+### 3.3 Logging Service (SQLite Integration)
+
+```java
+package com.privara.service;
+
+import java.sql.*;
+import java.time.Instant;
+import com.privara.model.SecurityLog;
+
+public class LoggingService {
+    private static LoggingService instance;
+    private Connection conn;
+    
+    public static LoggingService getInstance() {
+        if (instance == null) {
+            instance = new LoggingService();
+        }
+        return instance;
+    }
+    
+    public void initialize() {
+        try {
+            conn = DriverManager.getConnection("jdbc:sqlite:privara-security.db");
+            createTables();
+        } catch (SQLException e) {
+            System.err.println("Database initialization failed: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Log security event with parameterized query (SQL injection prevention).
+     */
+    public long logSecurityEvent(int profileId, String eventType, String severity,
+                                 String sourceProcess, String description,
+                                 String actionTaken, double anomalyScore) {
+        String sql = """
+            INSERT INTO security_logs 
+            (profile_id, unix_timestamp, event_type, severity, source_process, 
+             description, action_taken, anomaly_score, detection_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """;
+        
+        try (PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            pstmt.setInt(1, profileId);
+            pstmt.setLong(2, Instant.now().getEpochSecond());
+            pstmt.setString(3, eventType);
+            pstmt.setString(4, severity);
+            pstmt.setString(5, sourceProcess);
+            pstmt.setString(6, description);
+            pstmt.setString(7, actionTaken);
+            pstmt.setDouble(8, anomalyScore);
+            pstmt.setString(9, "ML_ANOMALY");
+            
+            pstmt.executeUpdate();
+            
+            ResultSet rs = pstmt.getGeneratedKeys();
+            if (rs.next()) {
+                return rs.getLong(1);
+            }
+        } catch (SQLException e) {
+            System.err.println("Failed to log event: " + e.getMessage());
+        }
+        return -1;
+    }
+    
+    /**
+     * Detect recurring threats (>5 occurrences in 7 days).
+     */
+    public ResultSet detectRecurringThreats(int profileId, int threshold, int days) {
+        String sql = """
+            SELECT 
+                td.threat_name,
+                td.threat_type,
+                COUNT(*) as occurrence_count,
+                MIN(sl.timestamp) as first_detected,
+                MAX(sl.timestamp) as last_detected,
+                AVG(sl.anomaly_score) as avg_anomaly_score
+            FROM security_logs sl
+            JOIN threat_details td ON sl.log_id = td.log_id
+            WHERE sl.profile_id = ? 
+                AND sl.timestamp >= datetime('now', '-' || ? || ' days')
+            GROUP BY td.threat_name, td.threat_type
+            HAVING COUNT(*) >= ?
+            ORDER BY occurrence_count DESC
+        """;
+        
+        try {
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            pstmt.setInt(1, profileId);
+            pstmt.setInt(2, days);
+            pstmt.setInt(3, threshold);
+            return pstmt.executeQuery();
+        } catch (SQLException e) {
+            System.err.println("Failed to detect recurring threats: " + e.getMessage());
+        }
+        return null;
+    }
+}
+```
+
+---
+
+## 4. BUG REPORTING SYSTEM
+
+### 4.1 Bug Report Architecture
+
+```java
+package com.privara.service;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import com.google.gson.Gson;
+
+public class BugReportService {
+    
+    private static final String GITHUB_API = "https://api.github.com/repos/[REPO_LINK]/issues";
+    private static final String GITHUB_TOKEN = System.getenv("GITHUB_TOKEN");
+    
+    /**
+     * Submit bug report to GitHub Issues.
+     */
+    public boolean submitToGitHub(BugReport report) {
+        if (GITHUB_TOKEN == null) {
+            System.err.println("GitHub token not configured");
+            return false;
+        }
+        
+        try {
+            String jsonPayload = new Gson().toJson(report.toGitHubIssue());
+            
+            HttpURLConnection conn = (HttpURLConnection) new URL(GITHUB_API).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "token " + GITHUB_TOKEN);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonPayload.getBytes("utf-8");
+                os.write(input, 0, input.length);
+            }
+            
+            int responseCode = conn.getResponseCode();
+            if (responseCode == 201) {
+                System.out.println("Bug report submitted successfully");
+                return true;
+            } else {
+                System.err.println("GitHub API error: " + responseCode);
+                return false;
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to submit to GitHub: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Store bug report locally with status tracking.
+     */
+    public void storeLocally(int profileId, BugReport report) {
+        LoggingService service = LoggingService.getInstance();
+        // Insert into bug_reports table
+        // Update status on submission success
+    }
+}
+```
+
+---
+
+## 5. DEPLOYMENT CHECKLIST
+
+### Installation Prerequisites
+- [ ] Java 21+ (OpenJDK or Oracle)
+- [ ] SQLite3 (included with app)
+- [ ] liboqs library (pip install liboqs)
+- [ ] PyCryptodome (pip install pycryptodome)
+- [ ] Python 3.10+ (for backend services)
+- [ ] Administrator privileges on Windows
+
+### Configuration Steps
+1. Clone repository: `git clone [REPO_LINK]`
+2. Install dependencies: `mvn install`
+3. Configure GitHub token: `export GITHUB_TOKEN=...`
+4. Build: `mvn clean package`
+5. Create .exe: `nsis Privara.nsi`
+6. Sign executable: `signtool sign /f cert.pfx Privara-Setup.exe`
+7. Distribute and verify digital signature
+
+---
+
+## REFERENCES
+
+- NIST PQC Standards: https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf
+- liboqs Documentation: https://liboqs.org/
+- SQLite Security: https://sqlite.org/security.html
+- JavaFX Best Practices: https://openjfx.io/

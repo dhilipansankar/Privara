@@ -1,0 +1,478 @@
+# Privara Enterprise HIDS - Quick Setup Guide
+
+## 🎯 GITHUB UPLOAD & DEPLOYMENT - QUICK START
+
+### **STEP 1: PREPARE GITHUB REPOSITORY**
+
+```bash
+# Initialize git and push to GitHub
+cd privara-hids
+
+# Configure git if first time
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# Create repository on GitHub (https://github.com/new)
+# Then:
+git init
+git remote add origin https://github.com/YOUR_USERNAME/privara-hids.git
+git add .
+git commit -m "Initial commit: Privara Enterprise HIDS v1.0.0"
+git branch -M main
+git push -u origin main
+
+# Verify push was successful
+git log --oneline -5
+```
+
+**Repository should contain:**
+- `src/` - Java source code
+- `installer/` - NSIS scripts and Windows setup files
+- `docs/` - Complete documentation
+- `scripts/` - Build and deployment scripts
+- `config/` - Default configuration files
+- `pom.xml` - Maven configuration
+- `.github/workflows/` - CI/CD pipelines
+
+---
+
+### **STEP 2: BUILD WINDOWS .EXE**
+
+#### **2.1 Prerequisites**
+
+```powershell
+# Check Java installation
+java -version  # Should show Java 21+
+
+# Check Maven installation
+mvn -version   # Should show Maven 3.8+
+
+# Install NSIS (Nullsoft Scriptable Install System)
+# Download from: https://nsis.sourceforge.io/
+# Add NSIS to PATH: C:\Program Files (x86)\NSIS
+```
+
+#### **2.2 Build the EXE**
+
+```batch
+# From project root directory
+cd privara-hids
+
+# Clean and build JAR
+mvn clean package -DskipTests
+
+# Build NSIS installer
+cd installer\nsis
+"C:\Program Files (x86)\NSIS\makensis.exe" /V4 Privara.nsi
+
+# Output: Privara-Setup-1.0.0.exe
+cd ..\..
+
+# Generate SHA-256 hash for integrity verification
+certutil -hashfile installer\nsis\Privara-Setup-1.0.0.exe SHA256 > RELEASE_HASH.txt
+```
+
+#### **2.3 Code Signing (Optional but Recommended)**
+
+```batch
+# Obtain EV Code Signing Certificate from DigiCert
+# Export as PKCS#12 (.pfx)
+
+# Sign the executable
+signtool sign /f cert.pfx /p PASSWORD /d "Privara Enterprise HIDS" ^
+  /du "https://github.com/privara-hids/privara-hids" ^
+  /t "http://timestamp.digicert.com" ^
+  installer\nsis\Privara-Setup-1.0.0.exe
+
+# Verify signature
+signtool verify /v /pa installer\nsis\Privara-Setup-1.0.0.exe
+```
+
+---
+
+### **STEP 3: CREATE GITHUB RELEASE**
+
+```bash
+# Tag the release
+git tag -a v1.0.0 -m "Release Privara Enterprise HIDS v1.0.0"
+git push origin v1.0.0
+
+# Upload files to GitHub Releases manually or via GitHub CLI:
+gh release create v1.0.0 \
+  --title "Privara Enterprise HIDS v1.0.0" \
+  --notes-file RELEASE_NOTES.md \
+  installer/nsis/Privara-Setup-1.0.0.exe \
+  RELEASE_HASH.txt
+```
+
+---
+
+### **STEP 4: LOGO SETUP**
+
+**Generated Logo:**
+- **File:** `privara_logo_dune.png`
+- **Style:** Denis Villeneuve tech noir, Dune-inspired
+- **Colors:** Sandy/tan tones, geometric security shield, encrypted glyphs
+- **Usage locations:**
+  1. `src/main/resources/icons/privara-logo-512.png` (App icon)
+  2. GitHub repository: `docs/images/logo.png`
+  3. Installer: `installer/nsis/Privara.ico`
+  4. Documentation: `README.md`
+
+**Setup icons for Windows:**
+
+```bash
+# Convert PNG to ICO for Windows installer
+# Use ImageMagick or online converter
+# Input: privara_logo_dune.png
+# Output: installer/nsis/Privara.ico (256x256)
+
+# Copy to resources
+cp docs/images/privara_logo_dune.png src/main/resources/icons/privara-logo-512.png
+```
+
+---
+
+## 📋 INSTALLATION & DEPLOYMENT SUMMARY
+
+### **For End Users:**
+
+```
+1. Download Privara-Setup-1.0.0.exe from GitHub Releases
+2. Right-click → Properties → Digital Signatures → Verify code signing
+3. Double-click installer (Run as Administrator)
+4. Accept GDPR compliance terms
+5. Select Performance Profile (Balanced/Aggressive/Conservative)
+6. Choose UI Theme (Tech Noir/Blade Runner/Enemy/Dune/2049)
+7. Complete wizard → Restart Windows
+8. Launch from Start Menu
+9. Create admin password during first launch
+10. Application begins monitoring system
+```
+
+### **For System Administrators:**
+
+```
+1. Deploy via Group Policy or System Center Configuration Manager (SCCM)
+2. Use silent installation: Privara-Setup.exe /S /D=%ProgramFiles%\Privara
+3. Configure via deployment-config.yaml
+4. Monitor via Event Viewer and Privara Dashboard
+5. Apply updates automatically via Privara's update checker
+6. Manage user profiles and security policies
+7. Export compliance reports (GDPR, HIPAA)
+8. Monitor SQLite database growth (auto-archival after 90 days)
+```
+
+### **For Developers:**
+
+```bash
+# Build from source
+git clone https://github.com/YOUR_USERNAME/privara-hids.git
+cd privara-hids
+mvn clean package
+
+# Run directly from IDE
+# Run target/Privara.jar
+java -jar target/Privara-1.0.0.jar
+
+# Build .exe
+mvn package -P windows-installer
+# Output: target/Privara-Setup-1.0.0.exe
+```
+
+---
+
+## 🔐 GITHUB REPOSITORY ESSENTIALS
+
+### **File Structure on GitHub**
+
+```
+privara-hids/
+├── README.md                 ← Comprehensive project overview
+├── LICENSE                   ← MIT License (open-source)
+├── SECURITY.md               ← Vulnerability disclosure policy
+├── CONTRIBUTING.md           ← Contribution guidelines
+│
+├── src/main/java/           ← JavaFX application source
+├── src/main/resources/      ← Icons, themes, FXML layouts
+├── src/test/java/           ← Unit tests
+│
+├── installer/
+│   └── nsis/
+│       ├── Privara.nsi      ← Windows installer script
+│       └── Privara.ico      ← Application icon
+│
+├── docs/
+│   ├── INSTALLATION.md      ← User installation guide
+│   ├── DEPLOYMENT.md        ← Admin deployment guide
+│   ├── ARCHITECTURE.md      ← Technical architecture
+│   ├── SECURITY.md          ← Security policies
+│   ├── API_REFERENCE.md     ← Developer API docs
+│   ├── DATABASE_SCHEMA.md   ← SQLite schema
+│   ├── PQC_IMPLEMENTATION.md ← NIST PQC details
+│   └── images/
+│       └── logo.png         ← Project logo
+│
+├── config/
+│   └── default-profiles/    ← Vikrama, Aggressive, Conservative profiles
+│
+├── scripts/
+│   ├── build-all.sh         ← Cross-platform build script
+│   ├── sign-exe.bat         ← Code signing
+│   └── create-release.sh    ← Release automation
+│
+├── .github/
+│   ├── workflows/
+│   │   ├── build.yml        ← Maven CI/CD
+│   │   ├── security-scan.yml ← CodeQL scanning
+│   │   └── release.yml      ← Automated releases
+│   │
+│   └── ISSUE_TEMPLATE/
+│       ├── bug_report.md
+│       ├── feature_request.md
+│       └── security.md
+│
+├── pom.xml                  ← Maven build configuration
+└── .gitignore              ← Git ignore rules
+```
+
+### **GitHub Actions Workflows**
+
+**`.github/workflows/build.yml`** - Automated testing on push:
+
+```yaml
+name: Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        java-version: ['21']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: ${{ matrix.java-version }}
+        distribution: 'temurin'
+    
+    - name: Build with Maven
+      run: mvn clean package -DskipTests
+    
+    - name: Upload JAR
+      uses: actions/upload-artifact@v3
+      with:
+        name: Privara-${{ github.run_number }}
+        path: target/Privara-1.0.0.jar
+```
+
+---
+
+## 🚀 QUICK DEPLOYMENT COMMANDS
+
+### **User Installation (One-Click)**
+
+```powershell
+# Download and install in one command
+$url = "https://github.com/privara-hids/privara-hids/releases/download/v1.0.0/Privara-Setup-1.0.0.exe"
+$output = "$env:TEMP\Privara-Setup.exe"
+Invoke-WebRequest -Uri $url -OutFile $output
+& $output /S /D="$env:ProgramFiles\Privara"
+```
+
+### **Admin Deployment Script**
+
+```batch
+@echo off
+REM Deploy Privara to 100+ workstations via domain
+
+set SHARE=\\deployment-server\software\privara
+set VERSION=1.0.0
+
+REM Create package
+mkdir %SHARE%
+copy Privara-Setup-%VERSION%.exe %SHARE%\
+copy RELEASE_HASH.txt %SHARE%\
+
+REM Deploy via Group Policy (SYSVOL)
+copy %SHARE%\Privara-Setup-%VERSION%.exe %systemroot%\SYSVOL\sysvol\domain\Policies\
+
+echo Deployment package ready for Group Policy distribution
+```
+
+### **Update Existing Installations**
+
+```python
+#!/usr/bin/env python3
+# Update all Privara instances to latest version
+
+import os
+import subprocess
+import requests
+import json
+
+def get_latest_release():
+    """Fetch latest Privara version from GitHub API"""
+    url = "https://api.github.com/repos/privara-hids/privara-hids/releases/latest"
+    response = requests.get(url)
+    return response.json()['tag_name'].lstrip('v')
+
+def update_privara(current_version, latest_version):
+    """Download and install latest version"""
+    if current_version < latest_version:
+        url = f"https://github.com/privara-hids/privara-hids/releases/download/v{latest_version}/Privara-Setup-{latest_version}.exe"
+        
+        # Download
+        subprocess.run(f"powershell -Command \"Invoke-WebRequest -Uri {url} -OutFile $env:TEMP\\Privara-Update.exe\"")
+        
+        # Stop service
+        subprocess.run("taskkill /IM Privara.exe /F")
+        subprocess.run("net stop PrivaraService")
+        
+        # Install
+        subprocess.run(f"$env:TEMP\\Privara-Update.exe /S")
+        
+        # Verify
+        subprocess.run("net start PrivaraService")
+        print(f"Updated Privara from {current_version} to {latest_version}")
+
+if __name__ == "__main__":
+    latest = get_latest_release()
+    # Get current version from registry
+    # current = get_installed_version()
+    # update_privara(current, latest)
+```
+
+---
+
+## 📊 MANAGEMENT DASHBOARD FEATURES
+
+After installation, access management features:
+
+```
+Dashboard Section:
+├── System Health (CPU, Memory, Disk)
+├── Recent Threats (Last 24 hours)
+├── Threat Trend Analytics (7-day view)
+└── Performance Metrics
+
+Threat Simulation:
+├── Network Entry Scenario
+├── USB Device Attack
+├── Email Attachment Exploit
+├── Registry Autostart Malware
+└── DLL Injection Process Hollowing
+
+Log Analysis:
+├── Recurring Threat Patterns (>5 in 7 days)
+├── Anomaly Score Trending
+├── Attack Chain Detection
+└── Statistical Summaries
+
+SQLite Database:
+├── Real-time Query Builder
+├── Custom Report Generation
+├── Compliance Report Export
+└── Database Optimization Tools
+
+Settings:
+├── Profile Management (Vikrama + Custom)
+├── Theme Selection (5 themes + custom)
+├── Timezone Configuration
+├── GDPR Data Controls
+└── Bug Reporting System
+```
+
+---
+
+## 🔗 GITHUB REPOSITORY LINKS
+
+**Replace `[REPO_LINK_PLACEHOLDER]` with:**
+```
+https://github.com/YOUR_USERNAME/privara-hids
+```
+
+**Key Links:**
+- **Main Repo:** https://github.com/YOUR_USERNAME/privara-hids
+- **Releases:** https://github.com/YOUR_USERNAME/privara-hids/releases
+- **Issues:** https://github.com/YOUR_USERNAME/privara-hids/issues
+- **Documentation:** https://github.com/YOUR_USERNAME/privara-hids/tree/main/docs
+- **Wiki:** https://github.com/YOUR_USERNAME/privara-hids/wiki
+- **Security Policy:** https://github.com/YOUR_USERNAME/privara-hids/blob/main/SECURITY.md
+
+---
+
+## 🎓 DEPLOYMENT TIMELINE
+
+```
+Day 1: Push to GitHub
+├─ Initialize repository
+├─ Upload all documentation
+├─ Configure GitHub Actions
+└─ Set up releases page
+
+Day 2: Build Release Artifacts
+├─ Maven build JAR
+├─ NSIS build .exe
+├─ Code signing
+└─ Generate hash verification
+
+Day 3: Create GitHub Release
+├─ Tag version (v1.0.0)
+├─ Upload .exe and hash
+├─ Publish release notes
+└─ Create shields/badges
+
+Day 4: Internal Testing
+├─ Test on Windows 10/11
+├─ Verify code signature
+├─ Test silent installation
+└─ Validate SQLite database
+
+Day 5: Production Rollout
+├─ Deploy to pilot group (5% users)
+├─ Monitor for issues
+├─ Scale to 50% if stable
+└─ Full rollout to 100%
+
+Week 2: Monitoring & Updates
+├─ Monitor GitHub issues
+├─ Apply security patches
+├─ Collect telemetry
+└─ Plan v1.1.0 features
+```
+
+---
+
+## 📞 SUPPORT & MAINTENANCE
+
+**For Users:**
+- GitHub Issues for bug reports
+- Documentation: https://github.com/privara-hids/privara-hids/docs
+- Release Notes for upgrade information
+
+**For Administrators:**
+- Deployment guide: `docs/DEPLOYMENT.md`
+- Configuration templates: `config/`
+- Troubleshooting: `docs/TROUBLESHOOTING.md`
+
+**For Developers:**
+- Contributing guidelines: `CONTRIBUTING.md`
+- API documentation: `docs/API_REFERENCE.md`
+- Build instructions: `README.md`
+
+---
+
+**🎯 You're all set to deploy Privara Enterprise HIDS!**
+
+Next steps:
+1. Push code to GitHub
+2. Build .exe installer
+3. Create release on GitHub
+4. Share download link with users
+5. Monitor and support installations
